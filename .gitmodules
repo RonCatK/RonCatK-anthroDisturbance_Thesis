@@ -6,3 +6,7 @@
 	path = modules/potentialResourcesNT_DataPrep
 	url = https://github.com/RonCatK/potentialResourcesNT_DataPrep.git
 	branch = Testing
+[submodule "anthroDisturbance_DataPrep"]
+	path = modules/anthroDisturbance_DataPrep
+	url = https://github.com/RonCatK/anthroDisturbance_DataPrep.git
+	branch = Testing
