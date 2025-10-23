@@ -1,0 +1,14 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# dev stuff
+/scripts/bootstrap.R
+scripts/devcontainer-postcreate.sh
+/.devcontainer/*
+
+
+# data
+/data/raw
+/data/aoi/aoi_smoke_test.*
