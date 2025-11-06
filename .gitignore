@@ -10,5 +10,15 @@ scripts/devcontainer-postcreate.sh
 
 
 # data
+/data/*
+!/data/download_links.csv
 /data/raw
 /data/aoi/aoi_smoke_test.*
+
+# scrapch, cache and output paths
+/scratch
+/outputs
+/cache
+.scfm_legacy/
+/scfm_legacy/
+.Rprofile
