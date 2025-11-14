@@ -486,12 +486,16 @@ scenario_cfg_from_row <- function(row, ctx) {
   )
 }
 
-run_rate_scenario <- function(cfg, ctx) {
+initialise_rate_run <- function(cfg, ctx) {
   runTag <- timestamp_tag()
   runName <- cfg$run_name %||% paste("rates", cfg$scenario_id, cfg$mode, runTag, sep = "_")
   outputPath <- ensure_path(file.path(ctx$scenarioOutputsRoot, runName))
   logFile <- file.path(ctx$logsDir, paste0(runName, ".log"))
   if (file.exists(logFile)) file.remove(logFile)
+  list(runName = runName, outputPath = outputPath, logFile = logFile)
+}
+
+with_log_capture <- function(logFile, code) {
   con <- file(logFile, open = "wt")
   on.exit(try(close(con), silent = TRUE), add = TRUE)
   sink(con, type = "output")
@@ -500,48 +504,51 @@ run_rate_scenario <- function(cfg, ctx) {
     try(sink(type = "message"), silent = TRUE)
     try(sink(type = "output"), silent = TRUE)
   }, add = TRUE)
+  code()
+}
 
-  status <- "SUCCESS"
-  errMsg <- NA_character_
-  summaryDT <- data.table::data.table()
+empty_verification <- function() {
+  list(csv = NA_character_, absolute_csv = NA_character_)
+}
 
-  rateTable <- tryCatch(resolve_rate_table(cfg, ctx), error = function(e) {
-    status <<- "FAIL"
-    errMsg <<- conditionMessage(e)
-    NULL
-  })
-  if (is.null(rateTable)) {
-    return(list(status = status, log = relative_to_root(logFile, ctx$projectRoot),
-                outputPath = relative_to_root(outputPath, ctx$projectRoot),
-                message = errMsg, summary = summaryDT, runName = runName))
-  }
+compose_rate_result <- function(status, errMsg, summaryDT, runInfo, ctx, verification = empty_verification()) {
+  if (is.null(verification)) verification <- empty_verification()
+  list(
+    status = status,
+    log = relative_to_root(runInfo$logFile, ctx$projectRoot),
+    outputPath = relative_to_root(runInfo$outputPath, ctx$projectRoot),
+    message = if (is.na(errMsg) || !nzchar(errMsg)) "" else errMsg,
+    summary = summaryDT,
+    verification = verification,
+    runName = runInfo$runName
+  )
+}
 
-  if (!is.null(cfg$seed)) {
-   set.seed(cfg$seed)
-  }
-
+select_rate_modules <- function(cfg) {
   baseModules <- c("anthroDisturbance_DataPrep", "anthroDisturbance_Generator")
-  if (isTRUE(cfg$use_fire) && length(cfg$fire_modules)) {
-    generator_idx <- match("anthroDisturbance_Generator", baseModules)
-    insert_after <- if (is.na(generator_idx)) length(baseModules) else max(0, generator_idx - 1)
-    modules <- append(baseModules, cfg$fire_modules, after = insert_after)
-    modules <- modules[!duplicated(modules)]
-  } else {
-    modules <- baseModules
+  if (!isTRUE(cfg$use_fire)) {
+    return(baseModules)
   }
-  if (isTRUE(cfg$use_fire) && !length(cfg$fire_modules)) {
+  if (!length(cfg$fire_modules)) {
     stop("Scenario '", cfg$scenario_id, "' sets use_fire = TRUE but no fire_module was provided.", call. = FALSE)
   }
-  generatedAsRaster <- identical(cfg$mode, "raster")
+  generator_idx <- match("anthroDisturbance_Generator", baseModules)
+  insert_after <- if (is.na(generator_idx)) length(baseModules) else max(0, generator_idx - 1)
+  modules <- append(baseModules, cfg$fire_modules, after = insert_after)
+  modules[!duplicated(modules)]
+}
 
-  projectPaths <- list(
+build_project_paths <- function(cfg, ctx, outputPath) {
+  list(
     modulePath = cfg$module_path,
     cachePath = ctx$cachePath,
     scratchPath = ctx$scratchRoot,
     inputPath = ctx$suiteInputs,
     outputPath = outputPath
   )
+}
 
+push_spades_options <- function(projectPaths, ctx, outputPath) {
   oldOptions <- options(
     spades.allowInitDuringSimInit = TRUE,
     spades.DTthreads = 1,
@@ -559,28 +566,31 @@ run_rate_scenario <- function(cfg, ctx) {
     spades.outputPath = outputPath,
     spades.modulePath = projectPaths$modulePath
   )
-  on.exit(options(oldOptions), add = TRUE)
+  function() options(oldOptions)
+}
 
-  if (inherits(ctx$rasterToMatch, "SpatRaster")) {
-    try({
-      rt <- ctx$rasterToMatch
-      totalCells <- terra::ncell(rt)
-      naCount <- terra::global(is.na(rt), fun = "sum", na.rm = TRUE)[1, 1]
-      validCells <- if (is.na(naCount)) NA_real_ else totalCells - naCount
-      minmax <- terra::minmax(rt)
-      pctValid <- if (!is.na(validCells)) (validCells / totalCells) * 100 else NA_real_
-      message(sprintf(
-        "RasterToMatch summary: cells=%s, valid=%s (%.2f%%), value range [%s, %s]",
-        format(totalCells, big.mark = ","),
-        if (is.na(validCells)) "NA" else format(validCells, big.mark = ","),
-        if (is.na(pctValid)) NaN else pctValid,
-        format(minmax[1, 1]),
-        format(minmax[2, 1])
-      ))
-    }, silent = TRUE)
-  }
+describe_raster <- function(rtm) {
+  if (!inherits(rtm, "SpatRaster")) return(invisible(NULL))
+  try({
+    totalCells <- terra::ncell(rtm)
+    naCount <- terra::global(is.na(rtm), fun = "sum", na.rm = TRUE)[1, 1]
+    validCells <- if (is.na(naCount)) NA_real_ else totalCells - naCount
+    minmax <- terra::minmax(rtm)
+    pctValid <- if (!is.na(validCells)) (validCells / totalCells) * 100 else NA_real_
+    message(sprintf(
+      "RasterToMatch summary: cells=%s, valid=%s (%.2f%%), value range [%s, %s]",
+      format(totalCells, big.mark = ","),
+      if (is.na(validCells)) "NA" else format(validCells, big.mark = ","),
+      if (is.na(pctValid)) NaN else pctValid,
+      format(minmax[1, 1]),
+      format(minmax[2, 1])
+    ))
+  }, silent = TRUE)
+  invisible(NULL)
+}
 
-  params <- list(
+build_generator_params <- function(cfg, runName, outputPath, generatedAsRaster) {
+  list(
     anthroDisturbance_DataPrep = list(
       useSavedList = FALSE,
       checkDisturbanceProportions = FALSE,
@@ -602,13 +612,143 @@ run_rate_scenario <- function(cfg, ctx) {
       .inputFolderFireLayer = outputPath
     )
   )
+}
 
-  objects <- list(
+build_spades_objects <- function(ctx, rateTable) {
+  list(
     disturbanceDT = ctx$disturbanceDT,
     DisturbanceRate = rateTable,
     studyArea = ctx$studyArea,
     rasterToMatch = ctx$rasterToMatch
   )
+}
+
+apply_rate_table_overrides <- function(sim, rateTable) {
+  if (is.null(rateTable) || !nrow(rateTable)) return(invisible(sim))
+  try({
+    if (data.table::is.data.table(sim$disturbanceParameters)) {
+      dp <- sim$disturbanceParameters
+      joinCols <- intersect(
+        c("dataName", "dataClass", "disturbanceType", "disturbanceOrigin", "disturbanceEnd"),
+        names(dp)
+      )
+      if (length(joinCols)) {
+        rt <- data.table::copy(rateTable)
+        if ("disturbanceRate" %in% names(rt)) {
+          rt[, disturbanceRate := suppressWarnings(as.numeric(disturbanceRate))]
+        }
+        if ("disturbanceInterval" %in% names(rt)) {
+          rt[, disturbanceInterval := suppressWarnings(as.integer(disturbanceInterval))]
+        }
+        if ("resolutionVector" %in% names(rt)) {
+          rt[, resolutionVector := suppressWarnings(as.integer(resolutionVector))]
+        }
+        dp[rt, disturbanceRate := fifelse(!is.na(i.disturbanceRate), i.disturbanceRate, disturbanceRate),
+           on = joinCols]
+        if ("disturbanceInterval" %in% names(rt) && "disturbanceInterval" %in% names(dp)) {
+          dp[rt, disturbanceInterval := fifelse(!is.na(i.disturbanceInterval), i.disturbanceInterval, disturbanceInterval),
+             on = joinCols]
+        }
+        if ("disturbanceSize" %in% names(rt) && "disturbanceSize" %in% names(dp)) {
+          dp[rt, disturbanceSize := ifelse(!is.na(i.disturbanceSize) & nzchar(i.disturbanceSize),
+                                           i.disturbanceSize, disturbanceSize),
+             on = joinCols]
+        }
+        if ("resolutionVector" %in% names(rt) && "resolutionVector" %in% names(dp)) {
+          dp[rt, resolutionVector := fifelse(!is.na(i.resolutionVector), i.resolutionVector, resolutionVector),
+             on = joinCols]
+        }
+        sim$disturbanceParameters <- dp
+      }
+    }
+    sim$DisturbanceRate <- rateTable
+  }, silent = TRUE)
+  invisible(sim)
+}
+
+write_disturbance_parameters <- function(simResult, outputPath) {
+  if (!"disturbanceParameters" %in% names(simResult)) return(invisible(NULL))
+  dpPath <- file.path(outputPath, "disturbanceParameters.csv")
+  tryCatch(
+    data.table::fwrite(simResult$disturbanceParameters, dpPath),
+    error = function(e) message("Failed to write disturbanceParameters: ", e$message)
+  )
+  invisible(NULL)
+}
+
+maybe_run_verification <- function(cfg, ctx, runInfo) {
+  if (!file.exists(ctx$verifyScript)) {
+    message("Verification script missing at ", ctx$verifyScript)
+    return(empty_verification())
+  }
+  message("Running verification for ", runInfo$runName)
+  verifyCmd <- c(ctx$verifyScript, cfg$scenario_id)
+  verifyOutput <- tryCatch(
+    system2("Rscript", verifyCmd, stdout = TRUE, stderr = TRUE),
+    error = function(e) {
+      message("Verification failed to launch: ", conditionMessage(e))
+      structure(character(), status = 1L)
+    }
+  )
+  if (length(verifyOutput)) writeLines(verifyOutput)
+  verificationPath <- NA_character_
+  if (length(verifyOutput)) {
+    writtenLine <- verifyOutput[grepl("^Verification written to\\s+", verifyOutput)]
+    if (length(writtenLine)) {
+      verificationPath <- trimws(sub("^Verification written to\\s+", "", writtenLine[1]))
+    }
+  }
+  verifyStatus <- attr(verifyOutput, "status")
+  if (!is.null(verifyStatus) && verifyStatus != 0) {
+    message("Verification exited with status ", verifyStatus)
+  }
+  if (!nzchar(verificationPath)) return(empty_verification())
+  list(
+    csv = relative_to_root(verificationPath, ctx$projectRoot),
+    absolute_csv = normalizePath(verificationPath, winslash = "/", mustWork = FALSE)
+  )
+}
+
+maybe_package_outputs <- function(cfg, ctx, runInfo) {
+  if (!isTRUE(cfg$package_outputs) || !file.exists(ctx$packageScript)) return(invisible(NULL))
+  message("Packaging outputs for ", runInfo$runName)
+  tryCatch(
+    system2("Rscript", c(ctx$packageScript, paste0("--run=", runInfo$runName))),
+    warning = function(w) message("Packaging warning: ", conditionMessage(w)),
+    error = function(e) message("Packaging failed: ", conditionMessage(e))
+  )
+  pkgDest <- ensure_path(file.path(ctx$packagedOutputsRoot, runInfo$runName))
+  pkgFiles <- list.files(runInfo$outputPath, pattern = "\\.(zip|gpkg|csv)$", full.names = TRUE)
+  if (length(pkgFiles)) file.copy(pkgFiles, pkgDest, overwrite = TRUE)
+  invisible(NULL)
+}
+
+run_rate_core <- function(cfg, ctx, runInfo) {
+  status <- "SUCCESS"
+  errMsg <- NA_character_
+  summaryDT <- data.table::data.table()
+
+  rateTable <- tryCatch(resolve_rate_table(cfg, ctx), error = function(e) {
+    status <<- "FAIL"
+    errMsg <<- conditionMessage(e)
+    NULL
+  })
+  if (is.null(rateTable)) {
+    return(compose_rate_result(status, errMsg, summaryDT, runInfo, ctx))
+  }
+
+  if (!is.null(cfg$seed)) set.seed(cfg$seed)
+
+  modules <- select_rate_modules(cfg)
+  generatedAsRaster <- identical(cfg$mode, "raster")
+  projectPaths <- build_project_paths(cfg, ctx, runInfo$outputPath)
+  restore_options <- push_spades_options(projectPaths, ctx, runInfo$outputPath)
+  on.exit(restore_options(), add = TRUE)
+
+  describe_raster(ctx$rasterToMatch)
+
+  params <- build_generator_params(cfg, runInfo$runName, runInfo$outputPath, generatedAsRaster)
+  objects <- build_spades_objects(ctx, rateTable)
 
   sim <- tryCatch(
     SpaDES.core::simInit(
@@ -630,51 +770,10 @@ run_rate_scenario <- function(cfg, ctx) {
     }
   )
   if (is.null(sim)) {
-    return(list(status = status, log = relative_to_root(logFile, ctx$projectRoot),
-                outputPath = relative_to_root(outputPath, ctx$projectRoot),
-                message = errMsg, summary = summaryDT, runName = runName))
+    return(compose_rate_result(status, errMsg, summaryDT, runInfo, ctx))
   }
 
-  if (!is.null(rateTable) && nrow(rateTable)) {
-    try({
-      if (data.table::is.data.table(sim$disturbanceParameters)) {
-        dp <- sim$disturbanceParameters
-        joinCols <- intersect(
-          c("dataName", "dataClass", "disturbanceType", "disturbanceOrigin", "disturbanceEnd"),
-          names(dp)
-        )
-        if (length(joinCols)) {
-          rt <- data.table::copy(rateTable)
-          if ("disturbanceRate" %in% names(rt)) {
-            rt[, disturbanceRate := suppressWarnings(as.numeric(disturbanceRate))]
-          }
-          if ("disturbanceInterval" %in% names(rt)) {
-            rt[, disturbanceInterval := suppressWarnings(as.integer(disturbanceInterval))]
-          }
-          if ("resolutionVector" %in% names(rt)) {
-            rt[, resolutionVector := suppressWarnings(as.integer(resolutionVector))]
-          }
-          dp[rt, disturbanceRate := fifelse(!is.na(i.disturbanceRate), i.disturbanceRate, disturbanceRate),
-             on = joinCols]
-          if ("disturbanceInterval" %in% names(rt) && "disturbanceInterval" %in% names(dp)) {
-            dp[rt, disturbanceInterval := fifelse(!is.na(i.disturbanceInterval), i.disturbanceInterval, disturbanceInterval),
-               on = joinCols]
-          }
-          if ("disturbanceSize" %in% names(rt) && "disturbanceSize" %in% names(dp)) {
-            dp[rt, disturbanceSize := ifelse(!is.na(i.disturbanceSize) & nzchar(i.disturbanceSize),
-                                             i.disturbanceSize, disturbanceSize),
-               on = joinCols]
-          }
-          if ("resolutionVector" %in% names(rt) && "resolutionVector" %in% names(dp)) {
-            dp[rt, resolutionVector := fifelse(!is.na(i.resolutionVector), i.resolutionVector, resolutionVector),
-               on = joinCols]
-          }
-          sim$disturbanceParameters <- dp
-        }
-      }
-      sim$DisturbanceRate <- rateTable
-    }, silent = TRUE)
-  }
+  apply_rate_table_overrides(sim, rateTable)
 
   simResult <- tryCatch(
     SpaDES.core::spades(sim),
@@ -685,68 +784,21 @@ run_rate_scenario <- function(cfg, ctx) {
     }
   )
   if (is.null(simResult)) {
-    return(list(status = status, log = relative_to_root(logFile, ctx$projectRoot),
-                outputPath = relative_to_root(outputPath, ctx$projectRoot),
-                message = errMsg, summary = summaryDT, runName = runName))
+    return(compose_rate_result(status, errMsg, summaryDT, runInfo, ctx))
   }
 
-  dpPath <- file.path(outputPath, "disturbanceParameters.csv")
-  if ("disturbanceParameters" %in% names(simResult)) {
-    tryCatch(data.table::fwrite(simResult$disturbanceParameters, dpPath), error = function(e) {
-      message("Failed to write disturbanceParameters: ", e$message)
-    })
-  }
+  write_disturbance_parameters(simResult, runInfo$outputPath)
 
-  summaryDT <- summarize_outputs(outputPath, cfg$scenario_id, cfg$total_rate)
+  summaryDT <- summarize_outputs(runInfo$outputPath, cfg$scenario_id, cfg$total_rate)
+  verification <- maybe_run_verification(cfg, ctx, runInfo)
+  maybe_package_outputs(cfg, ctx, runInfo)
 
-  verificationPath <- NA_character_
-  if (file.exists(ctx$verifyScript)) {
-    message("Running verification for ", runName)
-    verifyCmd <- c(ctx$verifyScript, cfg$scenario_id)
-    verifyOutput <- tryCatch(
-      system2("Rscript", verifyCmd, stdout = TRUE, stderr = TRUE),
-      error = function(e) {
-        message("Verification failed to launch: ", conditionMessage(e))
-        structure(character(), status = 1L)
-      }
-    )
-    if (length(verifyOutput)) {
-      writeLines(verifyOutput)
-      writtenLine <- verifyOutput[grepl("^Verification written to\\s+", verifyOutput)]
-      if (length(writtenLine)) {
-        verificationPath <- trimws(sub("^Verification written to\\s+", "", writtenLine[1]))
-      }
-    }
-    verifyStatus <- attr(verifyOutput, "status")
-    if (!is.null(verifyStatus) && verifyStatus != 0) {
-      message("Verification exited with status ", verifyStatus)
-    }
-  } else {
-    message("Verification script missing at ", ctx$verifyScript)
-  }
+  compose_rate_result(status, errMsg, summaryDT, runInfo, ctx, verification)
+}
 
-  if (isTRUE(cfg$package_outputs) && file.exists(ctx$packageScript)) {
-    message("Packaging outputs for ", runName)
-    tryCatch(system2("Rscript", c(ctx$packageScript, paste0("--run=", runName))),
-             warning = function(w) message("Packaging warning: ", conditionMessage(w)),
-             error = function(e) message("Packaging failed: ", conditionMessage(e)))
-    pkgDest <- ensure_path(file.path(ctx$packagedOutputsRoot, runName))
-    pkgFiles <- list.files(outputPath, pattern = "\\.(zip|gpkg|csv)$", full.names = TRUE)
-    if (length(pkgFiles)) file.copy(pkgFiles, pkgDest, overwrite = TRUE)
-  }
-
-  list(
-    status = status,
-    log = relative_to_root(logFile, ctx$projectRoot),
-    outputPath = relative_to_root(outputPath, ctx$projectRoot),
-    message = if (is.na(errMsg)) "" else errMsg,
-    summary = summaryDT,
-    verification = list(
-      csv = relative_to_root(verificationPath, ctx$projectRoot),
-      absolute_csv = if (is.na(verificationPath) || !nzchar(verificationPath)) NA_character_ else normalizePath(verificationPath, winslash = "/", mustWork = FALSE)
-    ),
-    runName = runName
-  )
+run_rate_scenario <- function(cfg, ctx) {
+  runInfo <- initialise_rate_run(cfg, ctx)
+  with_log_capture(runInfo$logFile, function() run_rate_core(cfg, ctx, runInfo))
 }
 
 execute_scenarios_from_csv <- function(ctx, csv_path, scenario_ids = NULL,

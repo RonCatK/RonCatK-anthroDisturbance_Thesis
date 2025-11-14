@@ -25,22 +25,6 @@ scenarioIdArg <- if (length(trailing) >= 1) trailing[1] else "scenario_rate_test
 scenarioRoot <- normalizePath(file.path(scriptDir, "..", ".."), winslash = "/", mustWork = TRUE)
 projectRoot <- normalizePath(file.path(scenarioRoot, ".."), winslash = "/", mustWork = TRUE)
 # locate testing root relative to project
-candidate_testing <- c(
-  file.path(projectRoot, "scratch", "validation", "rates", "testing", "v2"),
-  file.path(projectRoot, "validation", "rates", "testing", "v2")
-)
-testingRoot <- NULL
-for (cand in candidate_testing) {
-  if (dir.exists(cand)) {
-    testingRoot <- cand
-    break
-  }
-}
-if (is.null(testingRoot)) {
-  testingRoot <- candidate_testing[1]
-  dir.create(testingRoot, recursive = TRUE, showWarnings = FALSE)
-}
-
 scenarioCsv <- file.path(projectRoot, "validation", "rates", "scenarios", "scenarios.csv")
 if (!file.exists(scenarioCsv)) {
   stop("Scenario table not found at ", scenarioCsv, call. = FALSE)
@@ -454,12 +438,3 @@ runOutputPath <- file.path(
 )
 fwrite(joined, runOutputPath)
 message("Verification written to ", runOutputPath)
-
-if (dir.exists(testingRoot)) {
-  testingOutputPath <- file.path(
-    testingRoot,
-    sprintf("verification_%s_%s.csv", scenarioId, timestamp)
-  )
-  fwrite(joined, testingOutputPath)
-  message("Verification copied to ", testingOutputPath)
-}

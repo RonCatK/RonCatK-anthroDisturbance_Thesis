@@ -37,11 +37,78 @@ require_cache <- file.path(project_root, "cache", "Require_runner")
 dir.create(require_cache, recursive = TRUE, showWarnings = FALSE)
 Sys.setenv(REQUIRE_HOME = require_cache)
 
+# suite configuration (allows reusing this runner for other validation suites)
+suite_id <- getOption("validation.suite_id", Sys.getenv("VALIDATION_SUITE_ID", unset = "system"))
+if (is.null(suite_id) || !nzchar(suite_id)) suite_id <- "system"
+suite_label <- getOption("validation.suite_label", suite_id)
+
+suite_entrypoint <- getOption(
+  "validation.suite_entrypoint",
+  file.path("validation", suite_id, paste0("run_", suite_id, "_suite.R"))
+)
+
+suite_validation_root <- getOption("validation.suite_root",
+                                   file.path(project_root, "validation", suite_id))
+suite_validation_root <- normalizePath(suite_validation_root, winslash = "/",
+                                       mustWork = FALSE)
+
+suite_scratch_root <- getOption("validation.scratch_root",
+                                file.path(project_root, "scratch", "validation", suite_id))
+suite_scratch_root <- normalizePath(suite_scratch_root, winslash = "/",
+                                    mustWork = FALSE)
+
+suite_cache_root <- getOption("validation.cache_root",
+                              file.path(project_root, "cache", "validation", suite_id))
+suite_cache_root <- normalizePath(suite_cache_root, winslash = "/",
+                                  mustWork = FALSE)
+
+suite_outputs_root <- getOption("validation.outputs_root",
+                                file.path(project_root, "outputs", "validation", suite_id))
+suite_outputs_root <- normalizePath(suite_outputs_root, winslash = "/",
+                                    mustWork = FALSE)
+
+suite_default_csv <- getOption("validation.default_csv",
+                               file.path(suite_validation_root, "testing_runs.csv"))
+suite_default_csv <- normalizePath(suite_default_csv, winslash = "/",
+                                   mustWork = FALSE)
+
 # --- helpers -----------------------------------------------------------------
 
 ensure_path <- function(p) {
   dir.create(p, recursive = TRUE, showWarnings = FALSE)
   normalizePath(p, winslash = "/", mustWork = TRUE)
+}
+
+resolve_fire_mask_location <- function(pathValue) {
+  out <- list(dir = NULL, file = NULL)
+  if (is.null(pathValue) || is.na(pathValue) || !nzchar(pathValue)) {
+    return(out)
+  }
+  candidates <- unique(c(
+    pathValue,
+    path.expand(pathValue),
+    file.path(project_root, pathValue)
+  ))
+  for (candidate in candidates) {
+    expanded <- tryCatch(
+      normalizePath(candidate, winslash = "/", mustWork = FALSE),
+      error = function(...) NULL
+    )
+    if (is.null(expanded)) next
+    if (dir.exists(expanded)) {
+      out$dir <- expanded
+      return(out)
+    }
+    if (file.exists(expanded)) {
+      parent <- dirname(expanded)
+      if (dir.exists(parent)) {
+        out$dir <- parent
+        out$file <- expanded
+        return(out)
+      }
+    }
+  }
+  out
 }
 
 locate_input_data <- function() {
@@ -98,6 +165,13 @@ relative_to_root <- function(pathValue) {
   } else {
     normalized
   }
+}
+
+collapse_paths <- function(paths) {
+  if (is.null(paths) || !length(paths)) return("")
+  paths <- paths[!is.na(paths) & nzchar(paths)]
+  paths <- unique(paths)
+  if (!length(paths)) "" else paste(paths, collapse = ";")
 }
 
 safe_merge <- function(a, b) {
@@ -286,10 +360,108 @@ parse_fire_generation_spec <- function(value) {
 #   burnModulo: integer for checker (default 5)
 #   p: probability for sparse (default 0.01)
 #   burnValue: numeric cell value for burned cells (default 1)
-build_provided_fire_mask <- function(rtm, fireSpec) {
+build_provided_fire_mask <- function(rtm, fireSpec, startYear = NULL) {
   stopifnot(inherits(rtm, "SpatRaster"))
-  pattern <- tolower(as.character(fireSpec$params$pattern %||% "checker"))
+
+  first_non_empty <- function(vals) {
+    if (is.null(vals)) return(NULL)
+    for (val in vals) {
+      if (is.null(val) || isTRUE(is.na(val))) next
+      valChar <- trimws(as.character(val))
+      if (nzchar(valChar)) return(valChar)
+    }
+    NULL
+  }
+
+  maskDir <- first_non_empty(list(
+    fireSpec$params$resolved_dir,
+    fireSpec$params$dir,
+    fireSpec$params$path,
+    fireSpec$params$folder,
+    fireSpec$params$location,
+    fireSpec$params$source,
+    fireSpec$params$root
+  ))
+  maskFileParam <- first_non_empty(list(
+    fireSpec$params$resolved_file,
+    fireSpec$params$file,
+    fireSpec$params$filename,
+    fireSpec$params$layer
+  ))
   burnValue <- as.numeric(fireSpec$params$burnValue %||% 1)
+  startYearInt <- if (!is.null(startYear)) suppressWarnings(as.integer(startYear)) else NA_integer_
+
+  candidateFiles <- character()
+  if (!is.null(maskFileParam)) {
+    candidates <- unique(c(
+      maskFileParam,
+      path.expand(maskFileParam)
+    ))
+    if (!is.null(maskDir) && nzchar(maskDir)) {
+      candidates <- unique(c(candidates, file.path(maskDir, maskFileParam)))
+    }
+    for (cand in candidates) {
+      expanded <- tryCatch(
+        normalizePath(cand, winslash = "/", mustWork = FALSE),
+        error = function(...) NULL
+      )
+      if (is.null(expanded)) next
+      if (file.exists(expanded)) {
+        candidateFiles <- unique(c(candidateFiles, expanded))
+      }
+    }
+  }
+  if (!is.null(maskDir) && nzchar(maskDir)) {
+    dirExpanded <- tryCatch(
+      normalizePath(maskDir, winslash = "/", mustWork = FALSE),
+      error = function(...) NULL
+    )
+    if (!is.null(dirExpanded) && dir.exists(dirExpanded)) {
+      maskDir <- dirExpanded
+      dirFiles <- list.files(maskDir, pattern = "\\.tif(f)?$", full.names = TRUE)
+      if (length(dirFiles)) {
+        burnHits <- dirFiles[grepl("rstCurrentBurn", basename(dirFiles), ignore.case = TRUE)]
+        if (length(burnHits)) {
+          dirFiles <- unique(c(burnHits, setdiff(dirFiles, burnHits)))
+        }
+        candidateFiles <- unique(c(candidateFiles, dirFiles))
+      }
+    }
+  }
+  if (length(candidateFiles)) {
+    candidateFiles <- candidateFiles[file.exists(candidateFiles)]
+    if (!is.na(startYearInt)) {
+      patternYear <- sprintf("%04d", startYearInt)
+      idx <- which(grepl(patternYear, basename(candidateFiles), fixed = TRUE))
+      if (length(idx)) {
+        candidateFiles <- c(candidateFiles[idx], candidateFiles[-idx])
+      }
+    }
+    for (filePath in candidateFiles) {
+      burn <- tryCatch(terra::rast(filePath), error = function(...) NULL)
+      if (is.null(burn)) next
+      burn <- tryCatch({
+        if (!terra::compareGeom(burn, rtm, stopOnError = FALSE)) {
+          terra::project(burn, rtm, method = "near")
+        } else {
+          burn
+        }
+      }, error = function(...) {
+        tryCatch(terra::resample(burn, rtm, method = "near"), error = function(...) NULL)
+      })
+      if (is.null(burn)) next
+      burn <- terra::mask(burn, rtm)
+      vals <- terra::values(burn)
+      vals[is.na(vals)] <- 0
+      if (!is.na(burnValue)) {
+        vals <- ifelse(vals > 0, burnValue, 0)
+      }
+      terra::values(burn) <- vals
+      return(burn)
+    }
+  }
+
+  pattern <- tolower(as.character(fireSpec$params$pattern %||% "checker"))
   burn <- terra::rast(rtm)
   terra::values(burn) <- 0
   nc <- terra::ncell(burn)
@@ -387,12 +559,12 @@ run_scenario <- function(cfg) {
   if (!inherits(cfg$study_area, "SpatVector")) stop("cfg$study_area must be a terra::SpatVector", call. = FALSE)
 
   # paths
-  scratchRoot <- ensure_path(file.path(project_root, "scratch", "validation", "system"))
+  scratchRoot <- ensure_path(suite_scratch_root)
   logsDir <- ensure_path(file.path(scratchRoot, "scenario_logs"))
   scratchPath <- scratchRoot
-  cachePath <- ensure_path(file.path(project_root, "cache", "validation", "system"))
+  cachePath <- ensure_path(suite_cache_root)
   inputDataPath <- locate_input_data()
-  outputsRoot <- ensure_path(file.path(project_root, "outputs", "validation", "system"))
+  outputsRoot <- ensure_path(suite_outputs_root)
 
   # resources tuning (conservative defaults; allow user to override externally if needed)
   CORES <- as.integer(Sys.getenv("CORES", unset = "8"))
@@ -453,6 +625,60 @@ run_scenario <- function(cfg) {
       cfg$metadata <- safe_merge(cfg$metadata %||% list(), list(fire_generation = fireSpecLabel))
     }
   }
+  fireMaskDir <- NULL
+  fireMaskFile <- NULL
+  if (!is.null(fireSpec)) {
+    strat <- tolower(trimws(fireSpec$strategy %||% ""))
+    isProvidedMask <- nzchar(strat) && strat %in% c("provided_mask", "provided", "mask", "fire_mask")
+    if (isProvidedMask) {
+      fileFields <- c("resolved_file", "file", "filename", "layer")
+      for (field in fileFields) {
+        val <- fireSpec$params[[field]]
+        if (is.null(val) || isTRUE(is.na(val))) next
+        valChar <- trimws(as.character(val))
+        if (!nzchar(valChar)) next
+        candidates <- unique(c(
+          valChar,
+          path.expand(valChar),
+          file.path(project_root, valChar)
+        ))
+        for (cand in candidates) {
+          expanded <- tryCatch(
+            normalizePath(cand, winslash = "/", mustWork = FALSE),
+            error = function(...) NULL
+          )
+          if (is.null(expanded) || !file.exists(expanded)) next
+          fireMaskFile <- expanded
+          fireMaskDir <- dirname(expanded)
+          break
+        }
+        if (!is.null(fireMaskFile)) break
+      }
+      if (is.null(fireMaskDir)) {
+        pathFields <- c("resolved_dir", "dir", "path", "folder", "location", "source", "root")
+        for (field in pathFields) {
+          val <- fireSpec$params[[field]]
+          if (is.null(val) || isTRUE(is.na(val))) next
+          valChar <- trimws(as.character(val))
+          if (!nzchar(valChar)) next
+          loc <- resolve_fire_mask_location(valChar)
+          if (!is.null(loc$dir) && nzchar(loc$dir)) {
+            fireMaskDir <- loc$dir
+            if (!is.null(loc$file) && nzchar(loc$file) && is.null(fireMaskFile)) {
+              fireMaskFile <- loc$file
+            }
+            break
+          }
+        }
+      }
+      if (!is.null(fireMaskDir) && nzchar(fireMaskDir)) {
+        fireSpec$params$resolved_dir <- fireMaskDir
+        if (!is.null(fireMaskFile) && nzchar(fireMaskFile)) {
+          fireSpec$params$resolved_file <- fireMaskFile
+        }
+      }
+    }
+  }
   fireModuleName <- NULL
 
   # run name & output path
@@ -471,7 +697,7 @@ run_scenario <- function(cfg) {
 
   # assemble params with sensible defaults; allow overrides
   genDefaults <- list(
-    .inputFolderFireLayer = outputPath,
+    .inputFolderFireLayer = fireMaskDir %||% outputPath,
     .runName = runName,
     generatedDisturbanceAsRaster = FALSE,
     growthStepGenerating = 0.01,
@@ -560,7 +786,11 @@ run_scenario <- function(cfg) {
   # Inject a provided fire mask if requested (fast route, no fire module)
   if (!is.null(fireSpec) && tolower(fireSpec$strategy) %in% c("provided_mask", "provided", "mask", "fire_mask")) {
     # Build a mask aligned to rasterToMatch; keep it static for fast coverage
-    burn <- build_provided_fire_mask(rtm = create_local_rtm(cfg$study_area), fireSpec = fireSpec)
+    burn <- build_provided_fire_mask(
+      rtm = create_local_rtm(cfg$study_area),
+      fireSpec = fireSpec,
+      startYear = times$start %||% NA_real_
+    )
     # Attach as an initial object so anthroDisturbance_Generator can use rstCurrentBurn
     objs <- out$objects %||% list()
     objs$rstCurrentBurn <- burn
@@ -685,6 +915,66 @@ parse_numeric <- function(x) {
   val
 }
 
+parse_iterations <- function(x, default = 1L) {
+  if (length(x) == 0 || is.null(x) || all(is.na(x))) return(as.integer(default))
+  val <- suppressWarnings(as.integer(x))
+  if (length(val) == 0 || is.na(val) || val < 1L) return(as.integer(default))
+  as.integer(val)
+}
+
+generate_run_seeds <- function(count, base_seed = NA_integer_, scenario_id = NULL) {
+  count <- as.integer(count)
+  if (is.na(count) || count <= 0) return(integer())
+  max_seed <- min(.Machine$integer.max - 1000L, 1000000000L)
+  normalize_seed <- function(val) {
+    if (is.null(val) || length(val) == 0) return(NA_integer_)
+    val <- suppressWarnings(as.numeric(val[1]))
+    if (is.na(val) || !is.finite(val)) return(NA_integer_)
+    val <- floor(val)
+    maxInt <- .Machine$integer.max - 1L
+    if (maxInt <= 0L) maxInt <- 2147483647L
+    # ensure positive modulo without overflow
+    val <- ((val %% maxInt) + maxInt) %% maxInt
+    as.integer(val)
+  }
+
+  old_seed <- tryCatch(get(".Random.seed", envir = .GlobalEnv), error = function(...) NULL)
+  on.exit({
+    if (is.null(old_seed)) {
+      if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+        rm(".Random.seed", envir = .GlobalEnv)
+      }
+    } else {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+
+  baseSeedNorm <- normalize_seed(base_seed)
+  if (!is.na(baseSeedNorm)) {
+    set.seed(baseSeedNorm)
+  } else {
+    timeSeed <- normalize_seed(as.numeric(Sys.time()) * 1000)
+    scenarioSeed <- if (!is.null(scenario_id) && nzchar(as.character(scenario_id))) {
+      normalize_seed(sum(as.integer(charToRaw(as.character(scenario_id))), na.rm = TRUE))
+    } else {
+      NA_integer_
+    }
+    fallback <- normalize_seed(timeSeed)
+    if (!is.na(scenarioSeed)) {
+      if (is.na(fallback)) {
+        fallback <- scenarioSeed
+      } else {
+        fallback <- normalize_seed(fallback + scenarioSeed)
+      }
+    }
+    if (is.na(fallback)) fallback <- 42L
+    set.seed(fallback)
+  }
+
+  replaceFlag <- count > max_seed
+  as.integer(sample.int(max_seed, size = count, replace = replaceFlag))
+}
+
 parse_site_selection <- function(x) {
   if (length(x) == 0 || is.null(x) || all(is.na(x))) return(NULL)
   val <- trimws(as.character(x))
@@ -706,7 +996,7 @@ resolve_path <- function(pathCandidate) {
     val,
     path.expand(val),
     file.path(project_root, val),
-    file.path(project_root, "validation", "system", val),
+    file.path(suite_validation_root, val),
     file.path(project_root, "data", val)
   ))
   for (cand in candidates) {
@@ -716,6 +1006,58 @@ resolve_path <- function(pathCandidate) {
     }
   }
   NA_character_
+}
+
+load_params_file <- function(path, parent_env = parent.frame()) {
+  if (is.null(path) || is.na(path) || !nzchar(path)) {
+    return(list(cfg = NULL, params = NULL))
+  }
+  env <- new.env(parent = parent_env)
+  res <- tryCatch(
+    source(path, local = env, keep.source = FALSE),
+    error = function(e) {
+      stop(sprintf("Failed to load params_file '%s': %s", path, conditionMessage(e)), call. = FALSE)
+    }
+  )
+  val <- res$value
+  if (is.null(val)) {
+    overrides_obj <- if (exists("overrides", envir = env, inherits = FALSE)) get("overrides", env) else NULL
+    if (is.list(overrides_obj) && length(overrides_obj)) {
+      val <- overrides_obj
+    } else {
+      cfg_obj <- if (exists("cfg", envir = env, inherits = FALSE)) get("cfg", env) else NULL
+      params_obj <- if (exists("params", envir = env, inherits = FALSE)) get("params", env) else NULL
+      if (!is.null(cfg_obj) || !is.null(params_obj)) {
+        val <- list(cfg = cfg_obj, params = params_obj)
+      }
+    }
+  }
+  if (is.null(val)) return(list(cfg = NULL, params = NULL))
+  if (!is.list(val)) {
+    stop(sprintf("params_file '%s' must evaluate to a list (received class: %s).",
+                 path, paste(class(val), collapse = "/")), call. = FALSE)
+  }
+  cfg_out <- NULL
+  params_out <- NULL
+  if (!length(val)) return(list(cfg = NULL, params = NULL))
+  val_names <- names(val)
+  if (!is.null(val_names) && (("cfg" %in% val_names) || ("params" %in% val_names))) {
+    if ("cfg" %in% val_names) cfg_out <- val$cfg
+    if ("params" %in% val_names) params_out <- val$params
+    extras <- setdiff(val_names, c("cfg", "params"))
+    if (length(extras)) {
+      params_out <- safe_merge(params_out, val[extras])
+    }
+  } else {
+    params_out <- val
+  }
+  if (!is.null(cfg_out) && !is.list(cfg_out)) {
+    stop(sprintf("cfg entry in params_file '%s' must be a list.", path), call. = FALSE)
+  }
+  if (!is.null(params_out) && !is.list(params_out)) {
+    stop(sprintf("params entry in params_file '%s' must be a list.", path), call. = FALSE)
+  }
+  list(cfg = cfg_out, params = params_out)
 }
 
 resolve_study_area_path <- function(value) {
@@ -849,6 +1191,35 @@ scenario_cfg_from_row <- function(row) {
 
   cfg$params <- params
 
+  if ("params_file" %in% names(row)) {
+    paramsFileRaw <- row$params_file
+    if (!is.null(paramsFileRaw) && !all(is.na(paramsFileRaw))) {
+      paramsFileRaw <- paramsFileRaw[!is.na(paramsFileRaw)][1]
+    }
+    pfStr <- trimws(as.character(paramsFileRaw %||% ""))
+    if (length(pfStr) == 0 || is.na(pfStr)) {
+      pfStr <- ""
+    } else {
+      pfStrLower <- tolower(pfStr)
+      if (pfStrLower %in% c("", "na", "null", "none", "nil", "nan")) {
+        pfStr <- ""
+      }
+    }
+    if (nzchar(pfStr)) {
+      paramsFilePath <- resolve_path(pfStr)
+      if (is.na(paramsFilePath)) {
+        stop(sprintf("Unable to resolve params_file '%s'.", pfStr), call. = FALSE)
+      }
+      overrides <- load_params_file(paramsFilePath, parent_env = environment())
+      if (!is.null(overrides$cfg)) {
+        cfg <- safe_merge(cfg, overrides$cfg)
+      }
+      if (!is.null(overrides$params)) {
+        cfg$params <- safe_merge(cfg$params, overrides$params)
+      }
+    }
+  }
+
   fireSpec <- parse_fire_generation_spec(row$fire_generation)
   if (!is.null(fireSpec)) {
     cfg$fire_generation <- fireSpec
@@ -867,6 +1238,7 @@ strip_helper_cols <- function(dt) {
 ensure_testing_col_order <- function(dt) {
   desired <- c(
     "scenario_id", "status", "active", "last_run_date", "notes", "seed",
+    "replicates",
     "description", "branch", "study_area", "use_eccc", "total_rate",
     "disturbance_rate_table", "generated_disturbance_as_raster",
     "use_cluster_method", "refined_structure", "mask_water_and_mountains",
@@ -875,7 +1247,8 @@ ensure_testing_col_order <- function(dt) {
     "run_clustering_in_parallel", "growth_step_generating",
     "growth_step_enlarging_polys", "growth_step_enlarging_lines",
     "disturbance_rate_relates_to_buffered_area", "use_wind_data",
-    "start_year", "end_year", "fire_generation", "log_path", "output_path",
+    "start_year", "end_year", "fire_generation", "params_file",
+    "log_path", "output_path",
     "last_updated"
   )
   present <- desired[desired %in% names(dt)]
@@ -896,7 +1269,8 @@ execute_scenarios_from_csv <- function(csv_path,
   dt <- data.table::fread(csv_path, fill = TRUE)
   char_cols <- c("scenario_id", "description", "branch", "study_area",
                  "disturbance_rate_table", "site_selection", "fire_generation",
-                 "log_path", "output_path", "status", "notes", "last_updated", "last_run_date", "seed")
+                 "log_path", "output_path", "status", "notes", "last_updated",
+                 "last_run_date", "seed", "params_file")
   for (col in char_cols) {
     if (!col %in% names(dt)) {
       dt[, (col) := NA_character_]
@@ -904,6 +1278,7 @@ execute_scenarios_from_csv <- function(csv_path,
       dt[, (col) := as.character(dt[[col]])]
     }
   }
+  if (!"replicates" %in% names(dt)) dt[, replicates := NA_integer_]
   ensure_testing_col_order(dt)
   if (!"scenario_id" %in% names(dt)) {
     stop("CSV missing required 'scenario_id' column.", call. = FALSE)
@@ -959,26 +1334,98 @@ execute_scenarios_from_csv <- function(csv_path,
     row_info <- runnable[i]
     idx <- row_info$row_id
     rowList <- as.list(dt[idx])
-    cfg <- scenario_cfg_from_row(rowList)
-    message(sprintf("Running scenario '%s' (row %d)...", rowList$scenario_id, idx))
-    res <- run_scenario(cfg)
-    results[[length(results) + 1]] <- c(list(scenario_id = rowList$scenario_id), res)
+    baseScenarioId <- as.character(rowList$scenario_id)
+    iterCount <- parse_iterations(rowList$replicates, default = 1L)
+    baseSeed <- parse_numeric(rowList$seed)
+    iterSeeds <- if (iterCount > 1L) {
+      generate_run_seeds(iterCount, base_seed = baseSeed, scenario_id = baseScenarioId)
+    } else if (!is.na(baseSeed)) {
+      as.integer(baseSeed)
+    } else {
+      NA_integer_
+    }
 
+    if (iterCount > 1L) {
+      message(sprintf("Running scenario '%s' (row %d) with %d runs...", baseScenarioId, idx, iterCount))
+    } else {
+      message(sprintf("Running scenario '%s' (row %d)...", baseScenarioId, idx))
+    }
+
+    runSummaries <- vector("list", iterCount)
+    runStatuses <- character(iterCount)
+    runLogs <- character(iterCount)
+    runOutputs <- character(iterCount)
+    runMessages <- character(iterCount)
+
+    for (iter in seq_len(iterCount)) {
+      iterScenarioId <- if (iterCount > 1L) {
+        sprintf("%s_run_%02d", baseScenarioId, iter)
+      } else {
+        baseScenarioId
+      }
+      if (iterCount > 1L) {
+        message(sprintf("  Iteration %d/%d -> %s", iter, iterCount, iterScenarioId))
+      }
+      iterRow <- rowList
+      iterRow$scenario_id <- iterScenarioId
+      cfg <- scenario_cfg_from_row(iterRow)
+      if (iterCount > 1L) {
+        cfg$seed <- iterSeeds[iter]
+      } else if (!is.na(iterSeeds)) {
+        cfg$seed <- as.integer(iterSeeds)
+      }
+      res <- run_scenario(cfg)
+      logRel <- relative_to_root(res$log)
+      outRel <- relative_to_root(res$outputPath)
+      runStatuses[iter] <- res$status %||% "FAIL"
+      runLogs[iter] <- logRel
+      runOutputs[iter] <- outRel
+      msg <- res$message
+      if (is.null(msg) || is.na(msg)) msg <- ""
+      runMessages[iter] <- msg
+      seedVal <- if (iterCount > 1L) iterSeeds[iter] else if (!is.na(iterSeeds)) as.integer(iterSeeds) else NA_integer_
+      runSummaries[[iter]] <- list(
+        iteration = iter,
+        run_id = iterScenarioId,
+        status = res$status,
+        seed = seedVal,
+        log_path = logRel,
+        output_path = outRel,
+        message = msg
+      )
+    }
+
+    successMask <- runStatuses == "SUCCESS"
+    overallStatus <- if (all(successMask)) "SUCCESS" else "FAIL"
     dt[idx, `:=`(
-      status = res$status,
-      log_path = relative_to_root(res$log),
-      output_path = relative_to_root(res$outputPath),
+      status = overallStatus,
+      log_path = collapse_paths(runLogs),
+      output_path = collapse_paths(runOutputs),
       last_updated = timestamp_now(),
       last_run_date = format(Sys.time(), "%Y-%m-%d")
     )]
 
-    if (identical(res$status, "SUCCESS")) {
+    if (identical(overallStatus, "SUCCESS")) {
       dt[idx, notes := ""]
-    } else if (!is.null(res$message) && nzchar(res$message)) {
-      oldNote <- dt[idx, notes]
-      noteVal <- if (is.na(oldNote) || !nzchar(oldNote)) res$message else paste(oldNote, res$message, sep = " | ")
-      dt[idx, notes := noteVal]
+    } else {
+      msgs <- runMessages
+      msgs[is.na(msgs)] <- ""
+      detail <- paste(sprintf(
+        "run_%02d:%s%s",
+        seq_len(iterCount),
+        runStatuses,
+        ifelse(nzchar(msgs), paste0(" (", msgs, ")"), "")
+      ), collapse = " | ")
+      dt[idx, notes := detail]
     }
+
+    results[[length(results) + 1]] <- list(
+      scenario_id = baseScenarioId,
+      status = overallStatus,
+      runs = runSummaries,
+      log_paths = runLogs,
+      output_paths = runOutputs
+    )
   }
 
   ensure_testing_col_order(dt)
@@ -988,7 +1435,7 @@ execute_scenarios_from_csv <- function(csv_path,
 }
 
 parse_cli_args <- function(args) {
-  opts <- list(csv = file.path(project_root, "validation", "system", "testing_runs.csv"),
+  opts <- list(csv = suite_default_csv,
                scenario_ids = character(0),
                force = FALSE,
                dry_run = FALSE,
@@ -1023,9 +1470,21 @@ maybe_run_from_cli <- function() {
   if (!interactive() && sys.nframe() <= 1L) {
     cli_opts <- parse_cli_args(commandArgs(trailingOnly = TRUE))
     if (cli_opts$show_help) {
+      entry_abs <- tryCatch({
+        if (!nzchar(suite_entrypoint)) stop("no entrypoint")
+        if (!grepl("^[A-Za-z]:|^/", suite_entrypoint)) {
+          file.path(project_root, suite_entrypoint)
+        } else {
+          suite_entrypoint
+        }
+      }, error = function(...) file.path("validation", suite_id, paste0("run_", suite_id, "_suite.R")))
+      entry_disp <- relative_to_root(entry_abs)
+      if (is.na(entry_disp)) entry_disp <- entry_abs
+      csv_disp <- relative_to_root(suite_default_csv)
+      if (is.na(csv_disp)) csv_disp <- suite_default_csv
       cat(paste(
-        "Usage: Rscript validation/system/run_system_suite.R [--csv=PATH] [--scenario=id1,id2] [--force] [--dry-run]\n",
-        "  --csv=PATH        Path to CSV file (default: validation/system/testing_runs.csv)\n",
+        sprintf("Usage: Rscript %s [--csv=PATH] [--scenario=id1,id2] [--force] [--dry-run]\n", entry_disp),
+        sprintf("  --csv=PATH        Path to CSV file (default: %s)\n", csv_disp),
         "  --scenario=IDS    Comma-separated scenario_id list to run (defaults to all active pending)\n",
         "  --force           Run even if status already SUCCESS or SKIP\n",
         "  --mode=NAME       Mode selector: default|respect|all (default: default)\n",

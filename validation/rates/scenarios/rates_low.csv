@@ -1,0 +1,10 @@
+dataName,dataClass,disturbanceType,disturbanceOrigin,disturbanceEnd,disturbanceRate,disturbanceInterval,disturbanceSize,resolutionVector
+oilGas,potentialSeismicLines,Generating,seismicLines,,0.20,5,"max(stats::rnorm(1, 12000, 2000), 0)",30
+oilGas,potentialOilGas,Generating,oilGas,,0.04,5,"max(stats::rnorm(1, 35000, 8000), 0)",30
+oilGas,potentialPipeline,Connecting,oilGas,pipeline,,7,,15
+forestry,potentialCutblocks,Generating,cutblocks,,0.125,5,"max(stats::rnorm(1, 250000, 80000), 0)",30
+mining,potentialMining,Generating,mining,,0.05,5,"max(stats::rnorm(1, 140000, 45000), 0)",30
+settlements,settlements,Enlarging,settlements,,0.0075,5,,15
+settlements,potentialOtherPolygons,Enlarging,otherPolygons,,0.0075,5,,15
+Energy,potentialWindTurbines,Generating,windTurbines,,0.0075,5,"12000",30
+Energy,potentialPowerLines,Connecting,windTurbines,powerLines,,7,,15

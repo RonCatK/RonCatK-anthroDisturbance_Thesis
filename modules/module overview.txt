@@ -1,0 +1,280 @@
+Please provide a comprehensive guide to the inner workings of the module.
+first suggest an outline. suggestions: data flow paths (input -> output), by dataClass operational description, ...
+
+
+Proposed Outline
+
+Module Overview & Integration Scope: role within SpaDES stack; dependency expectations (e.g., fire stub, data prep modules); event timeline at a glance.
+Core Data Objects & Inputs: structure and classes of disturbanceParameters, disturbanceList, disturbanceDT, rasterToMatch, studyArea, optional layers (rstCurrentBurn, DEM, avoidance masks); how simInit sources helpers.
+Parameter Normalization & Pre-Checks: validation in init (site selection, growth steps, diffYears), input projection harmonization, caching/paths, handling missing upstream artifacts.
+Disturbance Production Pipeline: size estimation (calculateSize); rate calibration (calculateRate, ECCC fallback, buffered-area logic); scheduling logic via whichDisturbancesToGenerate; generation branches (generateDisturbances raster vs generateDisturbancesShp vector) including line/polygon handling, clustering, roads integration, fire interactions.
+State Updates & Persistence: maintaining currentDisturbanceLayer, merging outputs back into disturbanceList with replaceListFast, raster exports/buffer products, optional decade saves and initial-condition handling.
+Diagnostics, Utilities & Extension Points: verbose diagnostics hook, helper utilities (e.g., createModObject, wrapTerra, line geometry tools), configuration hooks for probability weighting, buffers, parallel clustering, and guidance for extending to new disturbance classes.
+lets tackle this one by one.
+start with
+Module Overview & Integration Scope: role within SpaDES stack; dependency expectations (e.g., fire stub, data prep modules); event timeline at a glance.
+
+
+Module Overview
+
+Purpose: Generates and updates anthropogenic disturbances over time using rates/sizes and potential layers; maintains a time-indexed “current disturbance” layer and writes optional diagnostics/exports. See modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 1).
+Core outputs:
+disturbanceList: nested list by sector/origin with both current and potential layers, updated each run.
+currentDisturbanceLayer: per-year composite mask of all current disturbances for masking new picks and downstream use.
+Execution mode:
+Vector path: generateDisturbancesShp() produces true geometries with optional clustering/roads integration.
+Raster path: generateDisturbances() produces pixel-aligned changes (faster, quantized).
+Controlled by P(sim)$generatedDisturbanceAsRaster.
+Integration Scope (SpaDES)
+
+Upstream modules expected
+Data prep for baseline and potentials: produces disturbanceList and (often) disturbanceParameters. The module warns and falls back to packaged NT example data if missing, meant only for testing. See .inputObjects defaults in modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 720).
+Fire producer (optional): whichever fire module supplies rstCurrentBurn (binary burn raster) used when forestry is scheduled.
+Downstream consumers
+Any module needing updated disturbance layers or a per-year composite mask (currentDisturbanceLayer), e.g., forestry, habitat, or cumulative-effects analyses.
+Scheduling integration
+Module uses SpaDES event queue. It schedules four event types at the start tick (intended order: size → rate → generate → update), then reschedules “generate” and “update” every runInterval years. See doEvent() in modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 431).
+Dependency Expectations
+
+Required objects (normally supplied upstream; fallbacks exist for testing):
+studyArea (SpatialPolygonDataFrame|SpatVector) and rasterToMatch (RasterLayer|SpatRaster), harmonized to the same CRS in init. See inputs: modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 360).
+disturbanceList: nested list of current and potential layers by sector/origin (terra SpatVector preferred).
+disturbanceParameters: table defining per-origin/type intervals, sizes, rates, geometries, and behavior flags.
+Optional: rstCurrentBurn (fire raster), DisturbanceRate (table of rates), DEM and featuresToAvoid for roads/masking when enabled.
+Optional fire integration
+Couple the generator with a fire module that maintains rstCurrentBurn (e.g., historic or simulated burns) when forestry disturbances need to avoid recently burned stands.
+For UA/rates harnesses there are two practical options:
+  • Run `validation/ua/precompute_fire_masks.R` with a fire module (e.g., SCFM) to emit
+    yearly `rstCurrentBurn_YYYY.tif` rasters, then point `UA_FIRE_MASK_DIR`
+    (or `.inputFolderFireLayer`) at that cache (defaults to `data/synthetic/fire/`)
+    so the generator can stream precomputed burns.
+  • When legacy dependencies block SCFM, `validation/ua/generate_synthetic_fire_masks.R`
+    can synthesize deterministic burn masks locally (tunable burn rate/cluster radius) that
+    satisfy forestry scenarios until real outputs are available.
+Packages
+Core: SpaDES.core, terra, raster, data.table, sf, reproducible, stars, nngeo, digest.
+Optional per-feature: roads (road connectivity), spaths/geodata (masking, DEM), foreach/doParallel (parallel clustering).
+Declared in reqdPkgs at modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 1).
+Event Timeline (At A Glance)
+
+init (t0)
+Validates site-selection parameters against disturbanceParameters.
+Reprojects studyArea to rasterToMatch CRS; ensures disturbanceDT is data.table; normalizes growth steps; validates diffYears.
+Schedules the following at time(sim) (same tick, same priority; intended sequence as listed): calculatingSize, calculatingRate, generatingDisturbances, updatingDisturbanceList. See scheduling at modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 431).
+calculatingSize (t0)
+Fills missing disturbanceSize for Generating types using calculateSize() if needed.
+calculatingRate (t0)
+Fills missing disturbanceRate for Generating/Enlarging using calculateRate(); prefers provided DisturbanceRate unless totalDisturbanceRate is set; can derive from ECCC via helper code. Emits optional diagnostics.
+generatingDisturbances (t0 and every runInterval)
+On initial tick, optionally writes initial conditions and a 500 m buffered composite.
+Chooses which rows to act on this tick by whichDisturbancesToGenerate() (interval alignment with startTime).
+Forestry-only: obtains rstCurrentBurn from sim (or tries to load from inputs) if forestry is scheduled.
+Executes either vector (generateDisturbancesShp) or raster (generateDisturbances), updates currentDisturbanceLayer[["Year<YYYY>"]], and, if configured, saves per-year disturbance rasters. See branch and rescheduling at modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 680).
+updatingDisturbanceList (t0 and every runInterval)
+Merges the “delta” from the generator back into sim$disturbanceList per sector/layer (does not drop sectors that did not update). Optionally saves snapshot. See modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R (line 702).
+Fire Stub Interplay (Optional)
+
+If forestry is scheduled and rstCurrentBurn is present in sim, it is used directly; otherwise the module attempts to read it from inputs, else forestry proceeds without a fire regime. Provide an upstream fire simulator or pre-generated mask when forestry runs need to respect recent burns.
+If you want, next I can map the concrete data flow (objects in/out per event) or drill into the vector vs raster generation branches.
+
+lets continue with
+Core Data Objects & Inputs: structure and classes of disturbanceParameters, disturbanceList, disturbanceDT, rasterToMatch, studyArea, optional layers (rstCurrentBurn, DEM, avoidance masks); how simInit sources helpers.
+
+
+Core Objects
+
+disturbanceParameters (data.table): per-origin configuration driving rates, sizes, intervals, and connectivity. See schema notes under “Disturbance Parameters”. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:240
+disturbanceList (list-of-lists): nested by sector → layer, holding both current and potential geometries. See schema notes under “Disturbance List”. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:200
+disturbanceDT (data.table): mapping of raw datasets to harmonized dataName/dataClass, including filtering hints. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:240
+rasterToMatch (RasterLayer|SpatRaster): template for CRS, extent, and resolution; used for projection, rasterization, and default buffering. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+studyArea (SpatialPolygonDataFrame|SpatVector): AOI polygon; projected to rasterToMatch CRS at init. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+Optional spatial inputs:
+rstCurrentBurn (RasterLayer): binary burns (1 = burned) for use by forestry. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+DEM (SpatRaster): elevation, required if P(sim)$useRoadsPackage is TRUE. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+featuresToAvoid (SpatRaster): water/mountains mask when P(sim)$maskWaterAndMountainsFromLines is TRUE. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+DisturbanceRate (data.table): explicit annual rates override; see schema notes below. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+Disturbance List
+
+Shape: list(sector = list(layerName = SpatVector|SpatRaster, ...), ...) with both “current” layers and “potential*” layers.
+Typical sectors: settlements, wind, pipelines, mining, forestry, oilGas. Example fixture builder shows canonical structure. modules_Testing/anthroDisturbance_Generator/tests/testthat/helper-disturbance-fixtures.R:1
+Typical layers per sector:
+settlements: settlements, potentialSettlements
+wind: windTurbines, potentialWindTurbines
+pipelines: pipelines, potentialPipelines (+ optionally roads)
+mining: mining, potentialMining
+forestry: cutblocks, potentialCutblocks
+oilGas: seismicLines, potentialSeismicLines
+Classes:
+Preferred geometry is SpatVector (terra). Rasters are converted to vectors where needed. modules_Testing/anthroDisturbance_Generator/R/generateDisturbances.R:160
+Potential layers should include attributes: Potential (int; priority/cluster id) and often ORIGIN (year; e.g., forestry gating). If missing, defaults are created. modules_Testing/anthroDisturbance_Generator/R/generateDisturbancesShp.R:598
+Disturbance Parameters
+
+Table columns used by the module (names matter):
+dataName (sector name; e.g., forestry, mining)
+dataClass (layer alias; potential names always start with “potential”)
+disturbanceType (“Enlarging”, “Generating”, “Connecting”)
+disturbanceOrigin (the current layer name to grow or to originate connections from)
+disturbanceEnd (target layer for “Connecting” types; e.g., connect windTurbines to powerLines or roads)
+disturbanceInterval (years between actions; used by scheduler gate) modules_Testing/anthroDisturbance_Generator/R/whichDisturbancesToGenerate.R:1
+disturbanceRate (percent of total study area per year; NA for “Connecting”; inferred if missing) modules_Testing/anthroDisturbance_Generator/R/calculateRate.R:1
+disturbanceSize (size expression for “Generating”; e.g., msm::rtnorm(1, mu, sd, lower = 0); inferred if missing) modules_Testing/anthroDisturbance_Generator/R/calculateSize.R:1
+resolutionVector (original data resolution; used for buffering/merge tuning) modules_Testing/anthroDisturbance_Generator/R/generateDisturbances.R:184
+Notes:
+Missing disturbanceSize for “Generating” is derived from current geometry stats (area for polygons, length for lines). modules_Testing/anthroDisturbance_Generator/R/calculateSize.R:1
+Missing disturbanceRate is computed either from ECCC change over P(sim)$diffYears or from supplied DisturbanceRate. modules_Testing/anthroDisturbance_Generator/R/calculateRate.R:1
+Disturbance DT (Harmonization Map)
+
+Columns referenced:
+dataName, dataClass (harmonized sector/layer names)
+fieldToSearch, classToSearch (subset rules for multi-class inputs)
+URL, fileName, dataType (IO hints; shp/gdb/tif/mif)
+Used by rate inference to map classes found in inputs to parameter rows. modules_Testing/anthroDisturbance_Generator/R/calculateRate.R:1
+Loaded when missing via prepInputs(...) default CSV. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+Raster To Match and Study Area
+
+rasterToMatch: template raster; module projects and resamples outputs to match it; also drives buffer widths and pixel size assumptions. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+studyArea: AOI polygon; reprojected to rasterToMatch CRS at init; buffered/aggregated for area-based calculations. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:520
+Recommendation: use a projected CRS in meters (e.g., EPSG:3005/UTM), since distances/areas and buffer widths are in meters.
+Optional Layers
+
+rstCurrentBurn (RasterLayer): binary mask (1=burn); used when forestry is scheduled. If absent in sim, module tries to load it by name/time from inputs. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:560
+DEM (SpatRaster): required for P(sim)$useRoadsPackage == TRUE; module may derive if missing. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+featuresToAvoid (SpatRaster): used when P(sim)$maskWaterAndMountainsFromLines == TRUE to route/avoid unsuitable terrain. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+DisturbanceRate (data.table): optional override with columns: dataName, dataClass, disturbanceType, disturbanceOrigin, disturbanceRate (percent). modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+How simInit Sources Helpers
+
+On simInit(), SpaDES sources:
+The module file and all R files under its R/ directory; functions become available to the module and are accessible via sim$.mods$anthroDisturbance_Generator$funcName if needed. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:1
+Key helpers:
+unwrapTerraList/wrapTerraList: serialize/deserialize large disturbanceList objects safely (local or Google Drive). modules_Testing/anthroDisturbance_Generator/R/wrapTerra.R:1
+createModObject: load missing time-stamped inputs (e.g., rstCurrentBurn_YYYY) from Paths$inputPath. modules_Testing/anthroDisturbance_Generator/R/createModObject.R:1
+replaceListFast: merge generated updates into disturbanceList (handles class mismatches, stamping, and enlarged/connecting logic). modules_Testing/anthroDisturbance_Generator/R/replaceListFast.R:1
+Generation backends: generateDisturbancesShp (vector) and generateDisturbances (raster-then-vector). modules_Testing/anthroDisturbance_Generator/R/generateDisturbancesShp.R:1, modules_Testing/anthroDisturbance_Generator/R/generateDisturbances.R:1
+Attribute Conventions (Potentials)
+
+Potential (integer): priority or cluster id for site selection; required/created on-the-fly if missing. modules_Testing/anthroDisturbance_Generator/R/generateDisturbancesShp.R:598
+ORIGIN (year): used for forestry (and potentially others) to select features within a historical window. modules_Testing/anthroDisturbance_Generator/R/generateDisturbancesShp.R:532
+If helpful next, I can map the per-event dataflow (what each event reads/writes) with concrete object names and example shapes.
+
+yes please do thatr
+
+
+Per-Event Dataflow
+
+Pre-Init Inputs (.inputObjects)
+
+Reads
+studyArea (vector) and rasterToMatch (raster); loads defaults if missing. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:720
+disturbanceList (list-of-lists of spatial layers); unwrapped via unwrapTerraList when a link/path is provided. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:761
+disturbanceParameters (data.table); default example if missing. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:779
+disturbanceDT (data.table); default example if missing. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:799
+Optional: rstCurrentBurn, DisturbanceRate, DEM, featuresToAvoid. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:360
+Writes
+Populates sim$studyArea, sim$rasterToMatch, sim$disturbanceList, sim$disturbanceParameters, sim$disturbanceDT, etc.
+Notes
+Designed to provide testing defaults; for production, upstream data-prep should supply all inputs.
+init
+
+Reads
+Parameters: P(sim)$siteSelectionAsDistributing, P(sim)$growthStepEnlarging{Lines,Polys}, P(sim)$diffYears.
+Objects: sim$studyArea, sim$rasterToMatch, sim$disturbanceDT. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:431
+Transforms
+Validates site-selection against disturbanceParameters$disturbanceOrigin.
+Reprojects studyArea to CRS of rasterToMatch.
+Ensures disturbanceDT is a data.table; normalizes growth steps (> 0); validates diffYears like “2010_2015”.
+Writes
+Initializes sim$currentDisturbanceLayer <- list().
+Schedules: calculatingSize, calculatingRate, generatingDisturbances, updatingDisturbanceList at time(sim) (ordered intent). modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:431
+calculatingSize
+
+Reads
+sim$disturbanceParameters rows with disturbanceType == "Generating" and is.na(disturbanceSize). modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:521
+sim$disturbanceList geometries by dataName/disturbanceOrigin.
+Transforms
+calculateSize(...) infers disturbanceSize as a string expression msm::rtnorm(1, mu, sd, lower = 0):
+Polygons → area stats; lines → length via terra::perim; converts rasters to polygons first. modules_Testing/anthroDisturbance_Generator/R/calculateSize.R:1
+If corresponding origin layer is missing, drops that row (tests assert this). modules_Testing/anthroDisturbance_Generator/tests/testthat/test-calculateSize.R:13
+Writes
+Updates sim$disturbanceParameters$disturbanceSize.
+calculatingRate
+
+Reads
+sim$disturbanceParameters rows with disturbanceType %in% c("Generating","Enlarging") and is.na(disturbanceRate). modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:530
+sim$studyArea, sim$rasterToMatch, sim$disturbanceList, sim$disturbanceDT.
+Optional: sim$DisturbanceRate, P(sim)$totalDisturbanceRate, P(sim)$diffYears, ECCC archive parameters.
+Transforms
+calculateRate(...) sets annual disturbanceRate (percent of total area):
+Uses supplied DisturbanceRate table (preferred), or derives from ECCC change between diffYears within the AOI. modules_Testing/anthroDisturbance_Generator/R/calculateRate.R:1
+Error if both DisturbanceRate and totalDisturbanceRate are provided. modules_Testing/anthroDisturbance_Generator/R/calculateRate.R:1
+Optional snapshot diagnostics table when P(sim)$verboseDiagnostics. modules_Testing/anthroDisturbance_Generator/R/diagnostics.R:1
+Writes
+Updates sim$disturbanceParameters$disturbanceRate.
+generatingDisturbances
+
+Reads
+sim$disturbanceParameters subset gated by whichDisturbancesToGenerate(start, current, end, ...). modules_Testing/anthroDisturbance_Generator/R/whichDisturbancesToGenerate.R:1
+sim$disturbanceList, sim$studyArea, sim$rasterToMatch, optional sim$rstCurrentBurn (needed if forestry scheduled).
+Prior currentDisturbanceLayer from the last year: tail(sim$currentDisturbanceLayer, 1)[[1]] (may be NULL in first run). modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:645
+Parameters: generatedDisturbanceAsRaster, growth steps, buffering flags, clustering/roads/masking options, etc. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:572
+Transforms
+First-year IC handling: optionally saves IC and writes a 500 m buffered composite raster. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:588
+Fire layer sourcing: if forestry is scheduled and sim$rstCurrentBurn is NULL, tries createModObject("rstCurrentBurn") from P(sim)$.inputFolderFireLayer. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:620
+Branch by mode:
+Vector mode: generateDisturbancesShp(...) returns:
+individualLayers (sector → layer → SpatVector/Raster of updates, mixed types)
+currentDisturbanceLayer (list of SpatVectors with only this-year additions)
+seismicLinesFirstYear (optional cache for special merge). modules_Testing/anthroDisturbance_Generator/R/generateDisturbancesShp.R:1
+Vector geometry draw sequence: modules_Testing/anthroDisturbance_Generator/R/generateDisturbancesShp.R:640-864
+1. Determine the interval quota: convert the per-year percent to area (`Rate <- disturbanceRate/100`) and multiply by study-area km² and `disturbanceInterval`; store as `expectedNewDisturbAreaSqM`.
+2. Prepare candidates: dissolve potential polygons by `Potential`, erase overlaps with current disturbances, and trim the quota if the available potential is smaller.
+3. Iterate through highest-potential features, sampling a footprint size from `disturbanceSize` (e.g., `msm::rtnorm(...)`). Clamp the sample to the remaining quota; if the sample still exceeds the quota, draw a Bernoulli with probability `quota/sample` and abandon the class when it returns 0.
+4. Buffer/merge as required (lines are buffered to rectangles, enlarging uses growth steps) until the accumulated area reaches the quota or available potential is exhausted; record the achieved vs. requested percent for diagnostics.
+5. For seismic lines, reuse cached clusters and length stats; for other classes the chosen polygons/lines are appended to the “current disturbance” layer and fed to connector routines.
+Raster mode: generateDisturbances(...) returns:
+individualLayers (mixed, may include SpatRaster)
+currentDisturbanceLayer (list of SpatVectors with this-year additions). modules_Testing/anthroDisturbance_Generator/R/generateDisturbances.R:1
+Raster generation loop: modules_Testing/anthroDisturbance_Generator/R/generateDisturbances.R:500-860
+1. Convert the yearly percent to pixels (`expectedDistPixels <- (disturbanceRate/100) * totNPix * disturbanceInterval`). `totNPix` comes from the rasterToMatch extent; buffered-mode requests already account for future 500 m buffers.
+2. If the quota is <1 pixel, fall back to a Bernoulli draw (`rbinom(1, 1, expectedDistPixelsProb)`), reducing the probability when buffers are required. A zero result aborts generation for that class.
+3. Otherwise iterate, each pass selecting the highest-potential cells (`potLayF`) and expanding by `growthStepGenerating`; candidate pixels are accumulated until the chosen count meets the quota or available potential is exhausted. Progress is logged every few iterations.
+4. When buffers are requested, newly chosen pixels are dilated to rectangular footprints; helper loops reduce overlap with existing disturbances and re-sample if too many buffered pixels spill outside the quota.
+5. Final rasters are written into the `individualLayers` list; vector copies of the new pixels feed connecting routines and diagnostics, and percentage variance from the target is appended to `PercentageDisturbances_*.txt`.
+Both backends merge existing “current” geometries into availability masks, erase overlaps with potentials, apply growth/generation math, and honor probability-based site selection when requested.
+Writes
+mod$updatedLayers <- list(...) from backend.
+sim$currentDisturbanceLayer[[paste0("Year", time(sim))]] <- mod$updatedLayers$currentDisturbanceLayer. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:696
+Optional per-year saves when P(sim)$saveCurrentDisturbances via saveDisturbances. modules_Testing/anthroDisturbance_Generator/R/saveDisturbances.R:1
+Reschedules
+Next generatingDisturbances at time + P(sim)$runInterval. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:700
+Shapes
+currentDisturbanceLayer[["YearYYYY"]] is a list (vector mode) keyed by sector with SpatVectors; tests assert this. modules_Testing/anthroDisturbance_Generator/tests/testthat/test-anthroDisturbance_Generator.R:255
+updatingDisturbanceList
+
+Reads
+mod$.whichToRun (if none scheduled, no-op), mod$updatedLayers$individualLayers (and optionally $seismicLinesFirstYear), sim$disturbanceParameters. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:702
+Transforms
+replaceListFast(...) merges updates into sim$disturbanceList:
+For Enlarging with empty disturbanceEnd → replace existing layer entirely (e.g., steady growth surfaces). modules_Testing/anthroDisturbance_Generator/R/replaceListFast.R:79
+For Enlarging with non-empty disturbanceEnd → merge (keeps past + new).
+For Generating → append/merge appropriately; coerces geometry mismatches by buffering lines/points to polygons using resolutionVector or raster resolution as width.
+Seismic special case: can stamp “past” and “current” pieces with createdInSimulationTime using seismicLinesFirstYear. modules_Testing/anthroDisturbance_Generator/tests/testthat/test-replaceListFast.R:1
+Always preserves “potential” layers; ensures Class attribute equals layer name.
+Writes
+Updates sim$disturbanceList per sector/layer (does not drop untouched sectors).
+Optional saveDisturbances(...) per-year snapshot when P(sim)$saveCurrentDisturbances. modules_Testing/anthroDisturbance_Generator/R/saveDisturbances.R:1
+Reschedules
+Next updatingDisturbanceList at time + P(sim)$runInterval. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:729
+Key Objects and Shapes (at a glance)
+
+sim$disturbanceParameters (data.table): columns used include dataName, dataClass, disturbanceType, disturbanceOrigin, disturbanceEnd, disturbanceInterval, disturbanceRate (percent), disturbanceSize (expression), resolutionVector. modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:240
+sim$disturbanceList (list): sector -> list(layerName -> SpatVector|SpatRaster, potential* layers kept). modules_Testing/anthroDisturbance_Generator/tests/testthat/helper-disturbance-fixtures.R:1
+sim$currentDisturbanceLayer[["YearYYYY"]] (list): sector -> SpatVector of new additions only (vector mode). modules_Testing/anthroDisturbance_Generator/tests/testthat/test-anthroDisturbance_Generator.R:255
+mod$updatedLayers (list):
+individualLayers (sector → layer → SpatVector|SpatRaster of updates)
+currentDisturbanceLayer (list; sector → SpatVector of new additions)
+seismicLinesFirstYear (optional SpatVector for seismic merging). modules_Testing/anthroDisturbance_Generator/R/generateDisturbancesShp.R:1847
+Optional Fire Interop
+
+When forestry is scheduled, rstCurrentBurn is used if present; otherwise loaded from inputs with createModObject (pattern-matched by year). modules_Testing/anthroDisturbance_Generator/anthroDisturbance_Generator.R:620
+For deterministic testing, pre-generate rstCurrentBurn layers with your preferred fire workflow and place them where createModObject can discover them.
+If you want, I can add a compact “inputs → outputs” diagram per event for a specific example sector (e.g., forestry) or trace one full decade end-to-end.

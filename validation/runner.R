@@ -1,14 +1,17 @@
 #!/usr/bin/env Rscript
 
-# Central validation runner. Delegates to system, rates, or UA suites while keeping the
-# original per-suite scripts intact. Use --suite=<system|rates|ua> to select a suite.
+# Central validation runner. Delegates to system, comparison, rates, or legacy UA suites while keeping the
+# original per-suite scripts intact. Use --suite=<system|comparison|rates|ua> to select a suite.
 
 print_main_help <- function() {
   cat(paste(
     "Usage: Rscript validation/runner.R [--suite=S] [suite-specific options]\n",
     "  --suite=system   Execute verification system tests (default).\n",
+    "  --suite=comparison Execute similarity comparison run.\n",
     "  --suite=rates    Execute disturbance rate verification scenarios.\n",
-    "  --suite=ua       Execute uncertainty analysis runs.\n",
+    "  --suite=ua       Execute legacy uncertainty analysis runs.\n",
+    "\n",
+    "UA v2 scenarios now run via the system harness. Execute them with --suite=system --scenario=ua_* and post-process using validation/ua_v2/ua_metrics.R.\n",
     "\n",
     "Additional options are delegated to each suite:\n",
     "  system suite  -> validation/system/run_system_suite.R --help\n",
@@ -43,7 +46,7 @@ if (!length(args) && interactive()) {
   quit(save = "no", status = 0, runLast = FALSE)
 }
 
-if (!nzchar(suite) || !suite %in% c("system", "rates", "ua")) {
+if (!nzchar(suite) || !suite %in% c("system", "comparison", "rates", "ua")) {
   stop("Unknown --suite value: ", suite, call. = FALSE)
 }
 
@@ -86,6 +89,24 @@ run_system_suite <- function(pass_args) {
   0L
 }
 
+run_comparison_suite <- function(pass_args) {
+  comparison_root <- file.path(project_root, "validation", "comparison")
+  default_csv <- file.path(comparison_root, "testing_runs.csv")
+  old_opts <- options(
+    validation.suite_id = "comparison",
+    validation.suite_label = "comparison",
+    validation.suite_root = comparison_root,
+    validation.suite_entrypoint = file.path("validation", "comparison", "run_comparison_suite.R"),
+    validation.matrix_entrypoint = file.path("validation", "comparison", "run_comparison_matrix.R"),
+    validation.default_csv = default_csv,
+    validation.scratch_root = file.path(project_root, "scratch", "validation", "comparison"),
+    validation.cache_root = file.path(project_root, "cache", "validation", "comparison"),
+    validation.outputs_root = file.path(project_root, "outputs", "comparison")
+  )
+  on.exit(do.call(options, old_opts), add = TRUE)
+  run_system_suite(pass_args)
+}
+
 run_external_suite <- function(script_rel, pass_args) {
   rscript <- Sys.which("Rscript")
   if (!nzchar(rscript)) {
@@ -100,6 +121,7 @@ run_external_suite <- function(script_rel, pass_args) {
 rc <- switch(
   suite,
   system = run_system_suite(suite_args),
+  comparison = run_comparison_suite(suite_args),
   rates = run_external_suite(file.path("validation", "rates", "scenarios", "run_rates_suite.R"), suite_args),
   ua    = run_external_suite(file.path("validation", "ua", "run_ua_suite.R"), suite_args)
 )

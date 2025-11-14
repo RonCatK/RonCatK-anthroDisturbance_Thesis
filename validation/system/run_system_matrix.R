@@ -1,9 +1,14 @@
 source("validation/system/run_system_suite.R")
 library(data.table)
 
+matrix_entrypoint <- getOption(
+  "validation.matrix_entrypoint",
+  file.path("validation", suite_id, paste0("run_", suite_id, "_matrix.R"))
+)
+
 parse_matrix_args <- function(args) {
   opts <- list(
-    csv = file.path(project_root, "validation", "system", "testing_runs.csv"),
+    csv = suite_default_csv,
     scenario_ids = character(0),
     force = FALSE,
     dry_run = FALSE,
@@ -35,9 +40,21 @@ parse_matrix_args <- function(args) {
 }
 
 maybe_print_help_and_quit <- function() {
+  entry_abs <- tryCatch({
+    if (!nzchar(matrix_entrypoint)) stop("no entry")
+    if (!grepl("^[A-Za-z]:|^/", matrix_entrypoint)) {
+      file.path(project_root, matrix_entrypoint)
+    } else {
+      matrix_entrypoint
+    }
+  }, error = function(...) file.path("validation", suite_id, paste0("run_", suite_id, "_matrix.R")))
+  entry_disp <- relative_to_root(entry_abs)
+  if (is.na(entry_disp)) entry_disp <- entry_abs
+  csv_disp <- relative_to_root(suite_default_csv)
+  if (is.na(csv_disp)) csv_disp <- suite_default_csv
   cat(paste0(
-    "Usage: Rscript validation/system/run_system_matrix.R [options]\n",
-    "  --csv=PATH        Override the testing_runs.csv path.\n",
+    sprintf("Usage: Rscript %s [options]\n", entry_disp),
+    sprintf("  --csv=PATH        Override the testing_runs.csv path (default: %s).\n", csv_disp),
     "  --scenario=IDS    Comma-separated list of scenario_ids to run.\n",
     "  --force           Run even if status already SUCCESS or SKIP.\n",
     "  --dry-run         Show which scenarios would run without executing.\n",

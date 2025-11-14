@@ -8,11 +8,13 @@ original per-suite scripts so legacy automation keeps working.
 
 ## Architecture at a Glance
 
-- `validation/runner.R` routes `--suite=system|rates|ua` requests to the
+- `validation/runner.R` routes `--suite=system|comparison|rates|ua` requests to the
   appropriate harness. Any additional CLI flags are forwarded unchanged to the
   suite runner.
 - Each suite keeps its own scripts, helper functions, and documentation under a
-  dedicated subdirectory (`system/`, `rates/`, `ua/`).
+  dedicated subdirectory (`system/`, `comparison/`, `rates/`, `ua/`). The UA v2
+  folder now hosts metrics + plotting helpers that post-process system-suite UA
+  runs.
 - Inputs are staged under `data/raw/validation/<suite>/` (plus
   `data/study_area/` for common spatial assets). Synthetic data helpers fall
   back to `data/synthetic/` when available.
@@ -36,6 +38,10 @@ Rscript validation/runner.R --suite=rates --scenarios=validation/rates/scenarios
 
 # Uncertainty analysis replicates
 Rscript validation/runner.R --suite=ua --replicates=10 --start-year=2020 --end-year=2030
+
+# UA v2 scenario rows (execute via system suite, then harvest metrics)
+Rscript validation/runner.R --suite=system --scenario=ua_cluster_cb5,ua_cluster_cb12
+Rscript validation/ua_v2/ua_metrics.R --scenario=ua_cluster_cb5,ua_cluster_cb12
 ```
 
 Every suite exposes a `--dry-run` flag to inspect the workload before execution.
@@ -94,7 +100,40 @@ for the complete option set.
 - **Notable flags**: `--mode=default|respect|all`, `--scenario=id`,
   `--csv=PATH`, `--force`, `--package={yes|no}`, `--dry-run`.
 
-### Uncertainty Analysis (`validation/ua/`)
+### Uncertainty Analysis v2 (`validation/ua_v2/`)
+
+- **Purpose**: Post-process the UA scenario rows that now run through the system
+  suite (e.g., `ua_cluster_cb5`, `ua_cluster_cb12`) and turn the resulting
+  multi-replicate outputs into metrics + figures.
+- **Key assets**:
+  - `ua_runs.csv` – preserved as a reference copy of the historical scenario
+    grid (parameter combinations, notes, replicate counts). Use it as a guide
+    when editing the UA rows that now live inside `validation/system/testing_runs.csv`.
+  - `ua_metrics.R` – scans the system suite’s `output_path` column, computes
+    per-replicate metrics from the exported disturbance shapefiles, summarizes
+    the distribution, and records `metrics_raw.csv`, `metrics_summary.csv`, and
+    `replicate_index.csv` under `outputs/validation/ua_v2/<scenario>/results/`.
+  - `ua_figures.R` – lightweight CLI that turns `metrics_summary.csv` into
+    uncertainty-band plots (`figures/uq_*.png`).
+  - `DistRates.csv` – cached ECCC disturbance rates that UA rows reference via
+    the system matrix.
+- **Workflow**:
+  1. Activate the UA rows (those whose `scenario_id` starts with `ua_`) in
+     `validation/system/testing_runs.csv`, then rerun them through the system
+     harness (e.g., `Rscript validation/runner.R --suite=system --scenario=ua_cluster_cb5`).
+  2. Execute `Rscript validation/ua_v2/ua_metrics.R --scenario=ua_cluster_cb5`
+     (add more comma-separated scenario IDs as needed). The script inspects the
+     `output_path` column, processes each replicate folder, and writes results
+     under `outputs/validation/ua_v2/`.
+  3. Figures are generated automatically when `ua_metrics.R` finishes (or rerun
+     manually with `Rscript validation/ua_v2/ua_figures.R --metrics=...`).
+- **Outputs**: `outputs/validation/ua_v2/<scenario>/results/metrics_raw.csv`,
+  `metrics_summary.csv`, `replicate_index.csv`, plus `figures/uq_*.png`. All
+  files reference the original system output/log paths for traceability.
+- **Notable flags (ua_metrics.R)**: `--testing-csv=PATH`,
+  `--scenario=id1,id2`, `--results-root=DIR`, `--figures=true|false`.
+
+### Uncertainty Analysis (legacy) (`validation/ua/`)
 
 - **Purpose**: Run the anthroDisturbance uncertainty-analysis scenarios (vector
   vs raster, masking, fire gating, etc.) across multiple replicates and extract
@@ -113,6 +152,9 @@ for the complete option set.
     metrics, and summary statistics across replicates.
   - `ua_utils.R` – shared helpers (module discovery, seeding strategy, geometry
     utilities).
+  - `precompute_wind_layers.R` – optional helper that crops the national wind
+    potential MIF tiles to the UA study area and materialises a local shapefile
+    (`data/raw/validation/ua/wind/`) so runs never rely on remote downloads.
 - **Inputs**: Expects objects named `studyArea`, `rasterToMatch`,
   `disturbanceParameters`, `disturbanceDT`, `disturbanceList`, and optionally
   `DisturbanceRate`, `rstCurrentBurn`, `featuresToAvoid`, `DEM`. Missing objects
@@ -154,11 +196,19 @@ All scripts avoid destructive edits outside these roots and honour the
 - Introduce new rate checks by cloning an existing row in
   `validation/rates/scenarios/scenarios.csv` and pointing to the desired
   disturbance-rate CSV or fire module combination.
-- Expand the UA scenario grid inside `ua_scenarios.R`: give the scenario a new
+- Use `validation/ua_v2/ua_runs.csv` as a reference when editing the UA rows
+  inside `validation/system/testing_runs.csv` (those whose ids start with `ua_`);
+  copy the desired parameter combination, set `status=PENDING`, and let the
+  system suite execute them.
+- For legacy runs, extend `ua_scenarios.R` with a new entry or migrate the
+  scenario into the v2 matrix.
   `id`, customise `psim`, and declare required objects so the harness can ensure
   prerequisites exist.
 - When large data assets change, refresh the corresponding raw inputs (e.g.,
   rerun the synthetic AOI generator) before re-running the suite.
+- Shared helpers that stage disturbance sources and reusable study-area rasters
+  live under `validation/helpers/`; update `disturbance_data.R` when the module
+  schema or local asset locations change.
 - Capture reproducibility context by committing updated matrices (`testing_runs.csv`,
   `scenarios.csv`) and preserving the `scratch/.../run_data.csv` outputs outside
   version control if you need provenance records.
