@@ -1,0 +1,55 @@
+suite: adqd_validation
+run_name: ADQD_HOLDOUT_CARIBOU
+description: AD/QD hold-out (2015-2020, baseline2015, module rates)
+config_version: "1"
+modules:
+  - anthroDisturbance_DataPrep
+  - potentialResourcesNT_DataPrep
+  - anthroDisturbance_Generator
+times:
+  start: 2015
+  end: 2020
+  timeunit: year
+paths:
+  input_root: data/preprocessed/comparison/BEAD2015
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: BEAD comparison
+metadata:
+  baseline_mode: baseline2015
+params:
+  anthroDisturbance_Generator:
+    runInterval: 5
+    diffYears: "2010_2015"
+    totalDisturbanceRate:
+    saveInitialDisturbances: false
+    saveCurrentDisturbances: true
+    generatedDisturbanceAsRaster: false
+    disturbanceRateRelatesToBufferedArea: true
+    growthStepEnlargingPolys: 1
+    growthStepEnlargingLines: #1
+    siteSelectionAsDistributing: seismicLines
+    connectingBlockSize:
+    seismicLineGrids: NULL
+    useClusterMethod: true
+    runClusteringInParallel: false
+    refinedStructure: true
+    clusterDistance: 1000
+    distanceNewLinesFactor: 1.5
+    useRoadsPackage: false
+    maskWaterAndMountainsFromLines: true
+    altitudeCut: 550
+    checkDisturbancesForBuffer: true
+    disturbFirstYear: false
+    .runName: ADQD_HOLDOUT_CARIBOU
+    .seed:
+      anthroDisturbance_Generator:
+        calculatingSize: 41
+        calculatingRate: 42
+        generatingDisturbances: 43
+        updatingDisturbanceList: 44
+n_reps: 5
+seed_base: 12345
+input_behaviour:
+  allow_download_if_missing: false

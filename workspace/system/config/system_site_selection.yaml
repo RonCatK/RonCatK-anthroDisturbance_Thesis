@@ -1,0 +1,40 @@
+suite: system
+run_name: system_supplied_sparse_blocks
+description: Supplied rates with tiny connector blocks and grid-based seismic.
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: raw
+params:
+  anthroDisturbance_Generator:
+    totalDisturbanceRate: 0.8
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: no
+    maskWaterAndMountainsFromLines: no
+    connectingBlockSize: 2.0
+    verboseDiagnostics: yes
+    disturbFirstYear: yes
+    saveInitialDisturbances: no
+    runClusteringInParallel: no
+    growthStepEnlargingPolys: 4
+    growthStepEnlargingLines: 4
+    disturbanceRateRelatesToBufferedArea: no
+    siteSelectionAsDistributing: oilGas;cutblocks;mining;seismicLines
+    use_wind_data: no
+    seismicLineGrids: 500
+    clusterDistance: 1000
+n_reps: 1
+seed_base: 42
+input_behaviour:
+  allow_download_if_missing: no

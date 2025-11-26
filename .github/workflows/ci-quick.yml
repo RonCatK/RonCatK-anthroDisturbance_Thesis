@@ -1,20 +1,35 @@
-name: CI Quick
+name: Module CI Aggregator
 
 on:
-  pull_request:
-    branches:
-      - main
+  repository_dispatch:
+    types:
+      - module-ci-report
   workflow_dispatch:
 
+env:
+  AGGREGATE_DIR: artifacts/module-reports
+
 jobs:
-  smoke-tests:
+  collect:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Setup R toolchain
-        uses: r-lib/actions/setup-r@v2
-      - name: Placeholder check
-        run: echo "TODO: add smoke tests for minimal AOI"
+      - name: Record incoming payload
+        run: |
+          mkdir -p "$AGGREGATE_DIR"
+          ts=$(date -u +"%Y%m%dT%H%M%SZ")
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "No payload (manual run)" > "$AGGREGATE_DIR/dispatch-$ts.json"
+          else
+            echo '${{ toJson(github.event) }}' > "$AGGREGATE_DIR/dispatch-$ts.json"
+          fi
+      - name: Upload aggregated reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-ci-reports
+          path: ${{ env.AGGREGATE_DIR }}
+          if-no-files-found: warn

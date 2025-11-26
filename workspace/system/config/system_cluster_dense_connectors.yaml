@@ -1,0 +1,40 @@
+suite: system
+run_name: system_cluster_dense_connectors
+description: Cluster-based run stressing high connector density.
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: raw
+params:
+  anthroDisturbance_Generator:
+    totalDisturbanceRate: 3.0
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: yes
+    refinedStructure: yes
+    maskWaterAndMountainsFromLines: no
+    connectingBlockSize: 2.0
+    verboseDiagnostics: yes
+    disturbFirstYear: yes
+    saveInitialDisturbances: yes
+    runClusteringInParallel: no
+    growthStepEnlargingPolys: 4
+    growthStepEnlargingLines: 15
+    disturbanceRateRelatesToBufferedArea: yes
+    use_wind_data: no
+    clusterDistance: 1000
+    distanceNewLinesFactor: 1.5
+n_reps: 1
+seed_base: 44
+input_behaviour:
+  allow_download_if_missing: no

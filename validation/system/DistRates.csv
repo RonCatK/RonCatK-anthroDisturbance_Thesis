@@ -1,6 +1,0 @@
-dataName,dataClass,disturbanceType,disturbanceOrigin,disturbanceRate
-forestry,potentialCutblocks,Generating,cutblocks,0.0449719330089742
-mining,potentialMining,Generating,mining,0.00185699225579038
-oilGas,potentialOilGas,Generating,oilGas,0.0124178222797604
-oilGas,potentialSeismicLines,Generating,seismicLines,1.25176737261665
-settlements,potentialSettlements,Enlarging,settlements,0.0121031278543757

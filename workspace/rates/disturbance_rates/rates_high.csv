@@ -1,0 +1,6 @@
+dataName,dataClass,disturbanceType,disturbanceOrigin,disturbanceEnd,disturbanceRate,disturbanceInterval,disturbanceSize,resolutionVector
+oilGas,potentialSeismicLines,Generating,seismicLines,"",0.375,10,"msm::rtnorm(1, 800, 150, lower = 0)",30
+oilGas,potentialOilGas,Generating,oilGas,"",0.15,10,"msm::rtnorm(1, 20000, 5000, lower = 0)",30
+forestry,potentialCutblocks,Generating,cutblocks,"",0.12,10,"msm::rtnorm(1, 250000, 80000, lower = 0)",30
+mining,potentialMining,Generating,mining,"",0.6,10,"msm::rtnorm(1, 60000, 15000, lower = 0)",30
+settlements,settlements,Enlarging,settlements,"",0.0225,10,,30

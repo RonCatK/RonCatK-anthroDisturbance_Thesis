@@ -2,12 +2,13 @@
 .Rhistory
 .RData
 .Ruserdata
+*.Rproj
 
 # dev stuff
 /scripts/bootstrap.R
 scripts/devcontainer-postcreate.sh
 /.devcontainer/*
-
+.vscode
 
 # data
 /data/*
@@ -22,3 +23,10 @@ scripts/devcontainer-postcreate.sh
 .scfm_legacy/
 /scfm_legacy/
 .Rprofile
+
+# emergent from config building and run logging
+/workspace/*/runs.csv
+/workspace/*/results/*
+/workspace/*/figures/*
+/workspace/*/config/generated/*
+artifacts/

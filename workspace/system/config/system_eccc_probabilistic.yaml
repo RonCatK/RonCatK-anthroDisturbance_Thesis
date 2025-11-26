@@ -1,0 +1,39 @@
+suite: system
+run_name: system_eccc_probabilistic
+description: ECCC run emphasizing mixed origin site selection.
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: raw
+params:
+  anthroDisturbance_Generator:
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: yes
+    refinedStructure: no
+    maskWaterAndMountainsFromLines: no
+    connectingBlockSize: 3.0
+    verboseDiagnostics: yes
+    disturbFirstYear: yes
+    saveInitialDisturbances: no
+    runClusteringInParallel: yes
+    growthStepEnlargingPolys: 4
+    growthStepEnlargingLines: 15
+    disturbanceRateRelatesToBufferedArea: no
+    use_wind_data: no
+    clusterDistance: 1000
+    distanceNewLinesFactor: 1.5
+n_reps: 1
+seed_base: 47
+input_behaviour:
+  allow_download_if_missing: no
