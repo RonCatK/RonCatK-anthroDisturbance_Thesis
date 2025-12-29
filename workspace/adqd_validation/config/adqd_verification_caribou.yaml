@@ -41,17 +41,21 @@ params:
     distanceNewLinesFactor: 1.5
     useRoadsPackage: false
     maskWaterAndMountainsFromLines: true
+    use_wind_data: false
     altitudeCut: 550
     checkDisturbancesForBuffer: true
     disturbFirstYear: false
-    .runName: ADQD_HOLDOUT_CARIBOU
+    .runName: ADQD_VERIFICATION_CARIBOU
     .seed:
       anthroDisturbance_Generator:
         calculatingSize: 41
         calculatingRate: 42
         generatingDisturbances: 43
         updatingDisturbanceList: 44
-n_reps: 5
+n_reps: 10
 seed_base: 12345
+study_area: data/study_area/NWT_boundary.shp
+raster_to_match: data/study_area/NWT_RTM_250m.tif
+geodata_path: data/raw
 input_behaviour:
   allow_download_if_missing: false

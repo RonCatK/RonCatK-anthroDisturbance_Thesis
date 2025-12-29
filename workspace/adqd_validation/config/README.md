@@ -17,10 +17,12 @@ comparison harness (`run_comparison_suite.R`) reads when the scenario matrix
   (`baseline2015`, 2015–2020) that uses the same core parameters but a shifted
   baseline/time window.
 - `adqd_verification_params.R` – AD/QD verification scenario that uses the
-  module-derived rates over 2010–2015 and seeds multiple replicates for the
-  AD/QD summary statistics.
-- `adqd_holdout_params.R` – AD/QD hold-out scenario for 2015–2020 with refined
-  clustering parameters and higher `clusterDistance` to match the hold-out case.
+  module-derived rates over 2010–2020 (single replicate) for the AD/QD summary
+  statistics.
+- `adqd_holdout_params.R` – AD/QD hold-out scenario for 2010–2020 (single
+  replicate) with refined clustering parameters.
+- `adqd_decadal.yaml` – full-NWT 2010–2020 validation run meant to be checked
+  against BEAD 2015 and 2020 checkpoints in a single sweep.
 
 ## Legacy rate table
 

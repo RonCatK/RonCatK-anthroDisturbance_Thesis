@@ -27,6 +27,35 @@ Highlights:
 - Each generated run is tagged with the seed (`rng_seed` column) alongside the sampled parameter values in both `ua_runs.csv` and `ua_design_points.csv`.
 - Run configs inherit `n_reps` from the base scenario unless `--replicates` is supplied, so the replicate count in each YAML and CSV row always matches what will be executed.
 
+## Site-selection UA (deterministic)
+
+To focus on `siteSelectionAsDistributing` only (all other knobs fixed to `ua_base`),
+use the deterministic helper:
+
+```bash
+Rscript workspace/uncertainty/build_site_selection_design.R
+```
+
+This emits:
+- Configs under `workspace/uncertainty/config/generated_site_selection/`
+- Design table `workspace/uncertainty/config/ua_site_selection_design_points.csv`
+- Runs index `workspace/uncertainty/config/ua_site_selection_runs.csv`
+
+Run them with:
+
+```bash
+bash workspace/uncertainty/run_site_selection.sh
+```
+
+Collect metrics using the design file:
+
+```bash
+Rscript workspace/uncertainty/collect_ua_metrics.R \
+  --mode design \
+  --run-name ua_sitesel_001,ua_sitesel_002,ua_sitesel_003,ua_sitesel_004 \
+  --design-file workspace/uncertainty/config/ua_site_selection_design_points.csv
+```
+
 ## Running UA scenarios
 
 ```bash

@@ -1,5 +1,9 @@
 #!/usr/bin/env Rscript
 # Build Morris design points and emit per-run configs for workspace/runner.R
+#
+# Fix (2025-12): export `norm_*` as the snapped norm returned by `map_norm_to_value()`
+# for discrete/boolean/integer factors (so `norm_*` and `value_*` are consistent and
+# no-op discrete steps are not mis-labelled as changes downstream).
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -154,7 +158,7 @@ format_samples <- function(norm_matrix, params) {
       mapped <- map_norm_to_value(param, norm_matrix[i, j])
       actual_vals[[param$column]] <- mapped$value
       meta_vals[[paste0("value_", param$name)]] <- mapped$value
-      meta_vals[[paste0("norm_", param$name)]] <- norm_matrix[i, j]
+      meta_vals[[paste0("norm_", param$name)]] <- mapped$norm
     }
     actual_list[[i]] <- actual_vals
     meta_list[[i]] <- meta_vals

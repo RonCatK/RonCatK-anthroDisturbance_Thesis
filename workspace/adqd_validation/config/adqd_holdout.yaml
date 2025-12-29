@@ -1,17 +1,17 @@
 suite: adqd_validation
 run_name: ADQD_HOLDOUT
-description: AD/QD hold-out (2015-2020, baseline2015, module rates)
+description: AD/QD hold-out (2010-2020, baseline2015, module rates)
 config_version: "1"
 modules:
   - anthroDisturbance_DataPrep
   - potentialResourcesNT_DataPrep
   - anthroDisturbance_Generator
 times:
-  start: 2015
+  start: 2010
   end: 2020
   timeunit: year
 paths:
-  input_root: data/preprocessed/comparison/BEAD2015
+  input_root: data/preprocessed/comparison/BEAD2010
   output_root: outputs
   scratch_root: scratch
   module_path: modules
@@ -19,6 +19,8 @@ data_profile: BEAD comparison
 metadata:
   baseline_mode: baseline2015
 params:
+  potentialResourcesNT_DataPrep:
+    allowPre2011: true
   anthroDisturbance_Generator:
     runInterval: 5
     diffYears: "2010_2015"
@@ -39,6 +41,7 @@ params:
     distanceNewLinesFactor: 1.5
     useRoadsPackage: false
     maskWaterAndMountainsFromLines: true
+    use_wind_data: false
     altitudeCut: 550
     checkDisturbancesForBuffer: true
     disturbFirstYear: false
@@ -49,7 +52,10 @@ params:
         calculatingRate: 42
         generatingDisturbances: 43
         updatingDisturbanceList: 44
-n_reps: 5
+n_reps: 10
 seed_base: 12345
+study_area: data/study_area/NWT_boundary.shp
+raster_to_match: data/study_area/NWT_RTM_250m.tif
+geodata_path: data/raw
 input_behaviour:
   allow_download_if_missing: false

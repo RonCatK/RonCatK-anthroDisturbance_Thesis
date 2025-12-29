@@ -1,6 +1,6 @@
 suite: adqd_validation
 run_name: ADQD_VERIFICATION
-description: AD/QD verification (2010-2015, baseline2010, module rates)
+description: AD/QD verification (2010-2020, baseline2010, module rates)
 config_version: "1"
 modules:
   - anthroDisturbance_DataPrep
@@ -8,7 +8,7 @@ modules:
   - anthroDisturbance_Generator
 times:
   start: 2010
-  end: 2015
+  end: 2020
   timeunit: year
 paths:
   input_root: data/preprocessed/comparison/BEAD2010
@@ -41,6 +41,7 @@ params:
     distanceNewLinesFactor: 1.5
     useRoadsPackage: false
     maskWaterAndMountainsFromLines: true
+    use_wind_data: false
     altitudeCut: 550
     checkDisturbancesForBuffer: true
     disturbFirstYear: false
@@ -51,10 +52,13 @@ params:
         calculatingRate: 42
         generatingDisturbances: 43
         updatingDisturbanceList: 44
-n_reps: 5
+n_reps: 1
 seed_base: 12345
 live_maps:
   enabled: true
   title: ADQD verification live map
+study_area: data/study_area/NWT_boundary.shp
+raster_to_match: data/study_area/NWT_RTM_250m.tif
+geodata_path: data/raw
 input_behaviour:
   allow_download_if_missing: false

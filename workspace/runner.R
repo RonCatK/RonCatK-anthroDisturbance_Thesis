@@ -279,6 +279,30 @@ validate_config <- function(cfg) {
   default_rtm <- file.path(project_root, "data", "study_area", "aoi_southwest_NWT_RTM_250m.tif")
   raster_to_match <- cfg$raster_to_match %||% cfg$rasterToMatch %||% default_rtm
   if (!nzchar(raster_to_match)) raster_to_match <- NULL
+  features_to_avoid <- cfg$features_to_avoid %||% cfg$featuresToAvoid %||% NULL
+  if (!is.null(features_to_avoid) && !nzchar(features_to_avoid)) features_to_avoid <- NULL
+  if (!is.null(features_to_avoid)) {
+    if (!grepl("^(/|[A-Za-z]:)", features_to_avoid)) {
+      features_to_avoid <- file.path(project_root, features_to_avoid)
+    }
+    features_to_avoid <- normalizePath(features_to_avoid, winslash = "/", mustWork = FALSE)
+  }
+  geodata_path <- cfg$geodata_path %||% cfg$paths$geodata_path %||% NULL
+  if (!is.null(geodata_path) && !nzchar(geodata_path)) geodata_path <- NULL
+  if (!is.null(geodata_path)) {
+    if (!grepl("^(/|[A-Za-z]:)", geodata_path)) {
+      geodata_path <- file.path(project_root, geodata_path)
+    }
+    geodata_path <- normalizePath(geodata_path, winslash = "/", mustWork = FALSE)
+  }
+  dem_path <- cfg$dem %||% cfg$DEM %||% NULL
+  if (!is.null(dem_path) && !nzchar(dem_path)) dem_path <- NULL
+  if (!is.null(dem_path)) {
+    if (!grepl("^(/|[A-Za-z]:)", dem_path)) {
+      dem_path <- file.path(project_root, dem_path)
+    }
+    dem_path <- normalizePath(dem_path, winslash = "/", mustWork = FALSE)
+  }
 
   disturbance_rate_file <- cfg$disturbance_rate_file %||% cfg$disturbance_rates %||% cfg$paths$disturbance_rate_file %||% cfg$paths$disturbance_rates
   if (!is.null(disturbance_rate_file) && !nzchar(disturbance_rate_file)) disturbance_rate_file <- NULL
@@ -319,6 +343,9 @@ validate_config <- function(cfg) {
     input_behaviour = input_behaviour,
     study_area = study_area,
     raster_to_match = raster_to_match,
+    features_to_avoid = features_to_avoid,
+    geodata_path = geodata_path,
+    dem = dem_path,
     disturbance_rate_file = disturbance_rate_file,
     live_maps = live_maps,
     config_file = normalizePath(cfg$config_file, winslash = "/", mustWork = FALSE)
@@ -335,6 +362,47 @@ derive_seeds <- function(cfg) {
   }
   base <- as.integer(cfg$seed_base %||% 12345L)
   base + seq_len(cfg$n_reps) - 1L
+}
+
+link_geodata_cache <- function(input_root, geodata_root, log_line = NULL) {
+  if (is.null(geodata_root) || !nzchar(geodata_root)) return(invisible(FALSE))
+  log_fn <- if (is.null(log_line)) message else log_line
+  src_root <- normalizePath(geodata_root, winslash = "/", mustWork = FALSE)
+  dest_root <- normalizePath(input_root, winslash = "/", mustWork = FALSE)
+  for (dir_name in c("elevation", "landuse")) {
+    src <- file.path(src_root, dir_name)
+    dest <- file.path(dest_root, dir_name)
+    if (dir.exists(dest)) {
+      dest_files <- list.files(dest, all.files = FALSE, no.. = TRUE)
+      if (length(dest_files)) {
+        log_fn(paste0("geodata cache already present: ", dest))
+        next
+      }
+      # empty destination; attempt to replace with a symlink or copy
+      ok_rm <- tryCatch(unlink(dest, recursive = TRUE), error = function(...) FALSE)
+      if (!isTRUE(ok_rm)) {
+        log_fn(paste0("geodata cache destination not removable: ", dest))
+      }
+    }
+    if (!dir.exists(src)) {
+      log_fn(paste0("geodata cache source missing: ", src))
+      next
+    }
+    ok <- tryCatch(file.symlink(src, dest), error = function(...) FALSE)
+    if (isTRUE(ok)) {
+      log_fn(paste0("Linked geodata cache ", dir_name, ": ", src, " -> ", dest))
+    } else {
+      dir.create(dest, recursive = TRUE, showWarnings = FALSE)
+      files <- list.files(src, full.names = TRUE)
+      if (length(files)) {
+        file.copy(files, dest, overwrite = FALSE)
+        log_fn(paste0("Copied geodata cache ", dir_name, ": ", src, " -> ", dest))
+      } else {
+        log_fn(paste0("geodata cache source empty: ", src))
+      }
+    }
+  }
+  invisible(TRUE)
 }
 
 ensure_dir <- function(path) {
@@ -500,6 +568,17 @@ drop_wind_from_disturbance <- function(dt) {
   dt
 }
 
+drop_wind_from_params <- function(dt) {
+  if (is.null(dt)) return(NULL)
+  cols <- intersect(c("dataName", "dataClass", "disturbanceOrigin", "disturbanceEnd", "disturbanceType"), names(dt))
+  if (!length(cols)) return(dt)
+  combined <- apply(dt[, cols, with = FALSE], 1, paste, collapse = "|")
+  mask <- grepl("wind", combined, ignore.case = TRUE)
+  if (!any(mask)) return(dt)
+  dt <- dt[!mask]
+  dt
+}
+
 normalize_generator_params <- function(cfg) {
   if (is.null(cfg$params$anthroDisturbance_Generator)) return(cfg)
   gen <- cfg$params$anthroDisturbance_Generator
@@ -621,6 +700,8 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
                   "; spades.inputPath=", getOption("spades.inputPath"),
                   "; spades.outputPath=", getOption("spades.outputPath")))
 
+  link_geodata_cache(cfg$paths$input_root, cfg$geodata_path, log_line)
+
   objects <- list()
   is_valid_spat <- function(obj) {
     tryCatch({
@@ -713,6 +794,26 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
       }
     }
   }
+  if (!should_use_wind_data(cfg)) {
+    if (!is.null(objects$disturbanceParameters)) {
+      before_n <- nrow(objects$disturbanceParameters)
+      objects$disturbanceParameters <- drop_wind_from_params(objects$disturbanceParameters)
+      after_n <- if (is.null(objects$disturbanceParameters)) 0L else nrow(objects$disturbanceParameters)
+      log_line(sprintf(
+        "use_wind_data is FALSE; removed %s wind-related entries from disturbanceParameters",
+        before_n - after_n
+      ))
+    }
+    if (!is.null(objects$DisturbanceRate)) {
+      before_n <- nrow(objects$DisturbanceRate)
+      objects$DisturbanceRate <- drop_wind_from_params(objects$DisturbanceRate)
+      after_n <- if (is.null(objects$DisturbanceRate)) 0L else nrow(objects$DisturbanceRate)
+      log_line(sprintf(
+        "use_wind_data is FALSE; removed %s wind-related entries from DisturbanceRate",
+        before_n - after_n
+      ))
+    }
+  }
   if (!is.null(cfg$study_area)) {
     sa_path <- cfg$study_area
     if (!grepl("^(/|[A-Za-z]:)", sa_path)) {
@@ -733,6 +834,78 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
     if (file.exists(rtm_path)) {
       rtm_obj <- tryCatch(terra::rast(rtm_path), error = function(...) NULL)
       if (!is.null(rtm_obj)) objects$rasterToMatch <- rtm_obj
+    } else {
+      log_line(paste0("raster_to_match path not found: ", rtm_path))
+    }
+  }
+  if (is.null(objects$rasterToMatch)) {
+    fallback_rtm <- file.path(project_root, "data", "study_area", "aoi_southwest_NWT_RTM_250m.tif")
+    if (!file.exists(fallback_rtm)) {
+      fallback_rtm <- file.path(project_root, "data", "raw", "RTM.tif")
+    }
+    if (file.exists(fallback_rtm)) {
+      rtm_obj <- tryCatch(terra::rast(fallback_rtm), error = function(...) NULL)
+      if (!is.null(rtm_obj)) {
+        objects$rasterToMatch <- rtm_obj
+        log_line(paste0("Loaded fallback rasterToMatch from ", fallback_rtm))
+      }
+    }
+  }
+  if (!is.null(objects$studyArea) && !is.null(objects$rasterToMatch)) {
+    sa_crs <- tryCatch(terra::crs(objects$studyArea), error = function(...) "")
+    rtm_crs <- tryCatch(terra::crs(objects$rasterToMatch), error = function(...) "")
+    if (!nzchar(sa_crs) && nzchar(rtm_crs)) {
+      terra::crs(objects$studyArea) <- rtm_crs
+      log_line("Assigned rasterToMatch CRS to studyArea (studyArea CRS missing).")
+    } else if (nzchar(sa_crs) && nzchar(rtm_crs) &&
+               !terra::same.crs(objects$studyArea, objects$rasterToMatch)) {
+      objects$studyArea <- tryCatch(
+        terra::project(objects$studyArea, objects$rasterToMatch),
+        error = function(e) {
+          log_line(paste0("Failed to project studyArea to rasterToMatch CRS: ", conditionMessage(e)))
+          objects$studyArea
+        }
+      )
+      log_line("Projected studyArea to match rasterToMatch CRS.")
+    }
+  }
+  if (!is.null(cfg$features_to_avoid)) {
+    fta_path <- cfg$features_to_avoid
+    if (!grepl("^(/|[A-Za-z]:)", fta_path)) {
+      fta_path <- file.path(project_root, fta_path)
+    }
+    fta_path <- tryCatch(normalizePath(fta_path, winslash = "/", mustWork = FALSE), error = function(...) fta_path)
+    if (file.exists(fta_path)) {
+      fta_obj <- tryCatch(terra::rast(fta_path), error = function(...) NULL)
+      if (is.null(fta_obj)) {
+        fta_obj <- tryCatch(terra::vect(fta_path), error = function(...) NULL)
+      }
+      if (!is.null(fta_obj) && is_valid_spat(fta_obj)) {
+        objects$featuresToAvoid <- fta_obj
+        log_line(paste0("Loaded featuresToAvoid from ", fta_path))
+      } else {
+        log_line(paste0("Failed to load featuresToAvoid from ", fta_path))
+      }
+    } else {
+      log_line(paste0("featuresToAvoid path not found: ", fta_path))
+    }
+  }
+  if (!is.null(cfg$dem)) {
+    dem_path <- cfg$dem
+    if (!grepl("^(/|[A-Za-z]:)", dem_path)) {
+      dem_path <- file.path(project_root, dem_path)
+    }
+    dem_path <- tryCatch(normalizePath(dem_path, winslash = "/", mustWork = FALSE), error = function(...) dem_path)
+    if (file.exists(dem_path)) {
+      dem_obj <- tryCatch(terra::rast(dem_path), error = function(...) NULL)
+      if (!is.null(dem_obj) && is_valid_spat(dem_obj)) {
+        objects$DEM <- dem_obj
+        log_line(paste0("Loaded DEM from ", dem_path))
+      } else {
+        log_line(paste0("Failed to load DEM from ", dem_path))
+      }
+    } else {
+      log_line(paste0("DEM path not found: ", dem_path))
     }
   }
   log_line(

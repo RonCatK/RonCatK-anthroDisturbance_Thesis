@@ -8,9 +8,14 @@ suppressPackageStartupMessages({
   library(stringr)
   library(tibble)
   library(optparse)
+  library(yaml)
 })
 
-`%||%` <- function(a, b) if (is.null(a) || is.na(a)) b else a
+`%||%` <- function(a, b) {
+  if (is.null(a) || length(a) == 0L) return(b)
+  if (length(a) == 1L && is.na(a)) return(b)
+  a
+}
 
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
@@ -41,6 +46,25 @@ option_list <- list(
     default = file.path("workspace", "uncertainty", "ua_design_points.csv"),
     help = "Design CSV (required for design mode).",
     metavar = "FILE"
+  ),
+  optparse::make_option(
+    c("--base-config"),
+    type = "character",
+    default = file.path("workspace", "uncertainty", "config", "ua_base.yaml"),
+    help = "Base YAML config for traceability metadata in replicates mode.",
+    metavar = "FILE"
+  ),
+  optparse::make_option(
+    c("--allow-duplicate-run-rows"),
+    action = "store_true",
+    default = FALSE,
+    help = "Allow duplicate run registry rows (dedupe keep-first with warning)."
+  ),
+  optparse::make_option(
+    c("--allow-incomplete-replicates"),
+    action = "store_true",
+    default = FALSE,
+    help = "Allow incomplete replicates (flag and exclude from summaries)."
   )
 )
 
@@ -87,6 +111,19 @@ normalize_path <- function(pathValue) {
     if (!is.null(norm)) return(norm)
   }
   expanded
+}
+
+ensure_qa_dir <- function() {
+  qa_dir <- file.path(project_root, "workspace", "uncertainty", "results", "qa")
+  dir.create(qa_dir, recursive = TRUE, showWarnings = FALSE)
+  qa_dir
+}
+
+write_qa_csv <- function(df, filename) {
+  qa_dir <- ensure_qa_dir()
+  qa_path <- file.path(qa_dir, filename)
+  readr::write_csv(df, qa_path)
+  qa_path
 }
 
 find_run_registry <- function() {
@@ -142,6 +179,7 @@ standardize_runs <- function(df, suite_default) {
     rename_first(nm[nml %in% c("run_name", "run", "scenario_id", "scenario")], "run_name") %>%
     rename_first(nm[nml %in% c("replicate", "rep", "rep_id")], "replicate") %>%
     rename_first(nm[nml == "seed"], "seed") %>%
+    rename_first(nm[nml %in% c("config_file", "config", "cfg", "config_path")], "config_file") %>%
     rename_first(nm[nml %in% c("output_path", "output_dir", "output_folder")], "output_path") %>%
     rename_first(nm[nml == "status"], "status") %>%
     rename_first(nm[nml %in% c("design_id", "designid", "sample_id", "point_id")], "design_id")
@@ -157,13 +195,30 @@ expand_output_rows <- function(row) {
   if (!length(paths)) {
     return(tibble())
   }
+  if (!is.null(row$replicate) && !is.na(row$replicate) && length(paths) > 1) {
+    stop(
+      sprintf(
+        "Malformed runs registry: replicate %s has multiple output_path entries. ",
+        row$replicate
+      ),
+      "Replicate rows must include exactly one output_path; omit replicate to enumerate paths.",
+      call. = FALSE
+    )
+  }
+  original_paths <- paths
+  paths <- unique(paths)
   log_paths <- if ("log_file" %in% names(row)) str_split(row$log_file %||% "", ";")[[1]] else character(0)
   log_paths <- trimws(log_paths)
+  if (length(log_paths)) {
+    log_paths <- log_paths[seq_along(original_paths)]
+    log_paths <- log_paths[match(paths, original_paths)]
+  }
   tibble(
     suite = row$suite %||% NA_character_,
     run_name = row$run_name %||% NA_character_,
     replicate = if (!is.null(row$replicate) && !is.na(row$replicate)) row$replicate else seq_along(paths),
     seed = row$seed %||% NA_real_,
+    config_file = row$config_file %||% NA_character_,
     output_path = paths,
     log_file = if (length(log_paths)) log_paths[seq_along(paths)] else NA_character_,
     status = row$status %||% NA_character_,
@@ -171,7 +226,37 @@ expand_output_rows <- function(row) {
   )
 }
 
-read_runs_registry <- function(registry_path, suite_val, run_name_val) {
+check_duplicate_run_rows <- function(df, run_label, allow_duplicates) {
+  key_cols <- c("suite", "run_name", "replicate", "seed", "output_path")
+  if (!all(key_cols %in% names(df))) return(df)
+  dupes <- df %>%
+    group_by(across(all_of(key_cols))) %>%
+    mutate(duplicate_count = n()) %>%
+    filter(duplicate_count > 1) %>%
+    ungroup()
+  if (nrow(dupes)) {
+    qa_path <- write_qa_csv(dupes, sprintf("ua_qc_duplicate_run_rows_%s.csv", run_label))
+    if (!isTRUE(allow_duplicates)) {
+      stop(
+        sprintf("Duplicate run registry rows detected (%d). See %s.", nrow(dupes), qa_path),
+        "Use --allow-duplicate-run-rows to dedupe with warning.",
+        call. = FALSE
+      )
+    }
+    warning(
+      sprintf("Duplicate run registry rows detected (%d). Dedupe keep-first (see %s).", nrow(dupes), qa_path),
+      call. = FALSE
+    )
+    df <- df %>%
+      mutate(.row = row_number()) %>%
+      distinct(across(all_of(key_cols)), .keep_all = TRUE) %>%
+      arrange(.row) %>%
+      select(-.row)
+  }
+  df
+}
+
+read_runs_registry <- function(registry_path, suite_val, run_name_val, run_label, allow_duplicates) {
   message(sprintf("Reading run registry: %s", registry_path))
   raw <- suppressMessages(readr::read_csv(registry_path, show_col_types = FALSE))
   std <- standardize_runs(raw, suite_default = suite_val)
@@ -187,15 +272,19 @@ read_runs_registry <- function(registry_path, suite_val, run_name_val) {
   expanded <- expanded %>%
     mutate(
       output_path = normalize_path(output_path),
+      config_file = normalize_path(config_file),
       output_exists = dir.exists(output_path),
       status_flag = tolower(status),
       is_success = output_exists | status_flag %in% c("success", "ok", "passed", "done")
     ) %>%
-    filter(is_success)
-  expanded %>%
+    filter(is_success) %>%
     mutate(
       replicate = as.integer(replicate),
-      seed = suppressWarnings(as.numeric(seed)),
+      seed = suppressWarnings(as.numeric(seed))
+    )
+  expanded <- check_duplicate_run_rows(expanded, run_label = run_label, allow_duplicates = allow_duplicates)
+  expanded %>%
+    mutate(
       run_id = ifelse(
         is.na(replicate),
         run_name,
@@ -211,21 +300,107 @@ read_design_file <- function(path) {
     stop("Design file not found: ", path, call. = FALSE)
   }
   message(sprintf("Reading UA design metadata from %s", hit))
-  design <- suppressMessages(readr::read_csv(hit, show_col_types = FALSE))
+  design_raw <- suppressMessages(readr::read_csv(hit, show_col_types = FALSE))
+  missing_cols <- setdiff(
+    c("totalDisturbanceRate", "clusterDistance", "useClusterMethod", "siteSelectionAsDistributing"),
+    names(design_raw)
+  )
+  if (length(missing_cols)) {
+    warning(
+      sprintf("Design metadata missing columns: %s", paste(missing_cols, collapse = ", ")),
+      call. = FALSE
+    )
+  }
   rename_first <- function(data, candidates, to) {
     cand <- candidates[candidates %in% names(data)][1]
     if (!is.na(cand)) dplyr::rename(data, !!to := !!sym(cand)) else data
   }
-  design <- design %>%
+  has_design_id <- any(c("design_id", "sample_id", "point_id") %in% names(design_raw))
+  design <- design_raw %>%
     rename_first(c("design_id", "sample_id", "point_id"), "design_id") %>%
     mutate(
-      design_id = if ("design_id" %in% names(design)) design_id else row_number(),
-      totalDisturbanceRate = if ("totalDisturbanceRate" %in% names(design)) totalDisturbanceRate else NA_real_,
-      clusterDistance = if ("clusterDistance" %in% names(design)) clusterDistance else NA_real_,
-      useClusterMethod = if ("useClusterMethod" %in% names(design)) useClusterMethod else NA,
-      siteSelectionAsDistributing = if ("siteSelectionAsDistributing" %in% names(design)) siteSelectionAsDistributing else NA_character_
+      design_id = if (has_design_id) design_id else row_number(),
+      totalDisturbanceRate = if ("totalDisturbanceRate" %in% names(design_raw)) totalDisturbanceRate else NA_real_,
+      clusterDistance = if ("clusterDistance" %in% names(design_raw)) clusterDistance else NA_real_,
+      useClusterMethod = if ("useClusterMethod" %in% names(design_raw)) useClusterMethod else NA,
+      siteSelectionAsDistributing = if ("siteSelectionAsDistributing" %in% names(design_raw)) siteSelectionAsDistributing else NA_character_
     )
   design
+}
+
+read_base_config <- function(path) {
+  candidates <- c(path, file.path(project_root, path), file.path(project_root, "workspace", "uncertainty", "config", basename(path)))
+  hit <- candidates[file.exists(candidates)][1]
+  if (is.na(hit)) {
+    stop("Base config not found: ", path, call. = FALSE)
+  }
+  message(sprintf("Reading UA base config from %s", hit))
+  cfg <- yaml::read_yaml(hit)
+  params <- cfg$params$anthroDisturbance_Generator %||% list()
+  list(
+    totalDisturbanceRate = params$totalDisturbanceRate %||% NA_real_,
+    clusterDistance = params$clusterDistance %||% NA_real_,
+    useClusterMethod = params$useClusterMethod %||% NA,
+    siteSelectionAsDistributing = params$siteSelectionAsDistributing %||% NA_character_
+  )
+}
+
+read_config_traceability <- function(config_path) {
+  if (is.null(config_path) || is.na(config_path) || !nzchar(config_path)) {
+    return(list(
+      totalDisturbanceRate = NA_real_,
+      clusterDistance = NA_real_,
+      useClusterMethod = NA,
+      siteSelectionAsDistributing = NA_character_
+    ))
+  }
+  hit <- normalize_path(config_path)
+  if (is.null(hit) || is.na(hit) || !file.exists(hit)) {
+    warning("Config file not found: ", config_path, call. = FALSE)
+    return(list(
+      totalDisturbanceRate = NA_real_,
+      clusterDistance = NA_real_,
+      useClusterMethod = NA,
+      siteSelectionAsDistributing = NA_character_
+    ))
+  }
+  cfg <- yaml::read_yaml(hit)
+  params <- cfg$params$anthroDisturbance_Generator %||% list()
+  list(
+    totalDisturbanceRate = params$totalDisturbanceRate %||% NA_real_,
+    clusterDistance = params$clusterDistance %||% NA_real_,
+    useClusterMethod = params$useClusterMethod %||% NA,
+    siteSelectionAsDistributing = params$siteSelectionAsDistributing %||% NA_character_
+  )
+}
+
+populate_traceability_from_configs <- function(df) {
+  if (!"config_file" %in% names(df)) return(df)
+  if (!"totalDisturbanceRate" %in% names(df)) df$totalDisturbanceRate <- NA_real_
+  if (!"clusterDistance" %in% names(df)) df$clusterDistance <- NA_real_
+  if (!"useClusterMethod" %in% names(df)) df$useClusterMethod <- NA
+  if (!"siteSelectionAsDistributing" %in% names(df)) df$siteSelectionAsDistributing <- NA_character_
+
+  config_tbl <- df %>%
+    distinct(config_file) %>%
+    mutate(trace = map(config_file, read_config_traceability)) %>%
+    transmute(
+      config_file,
+      cfg_totalDisturbanceRate = vapply(trace, function(x) x$totalDisturbanceRate %||% NA_real_, numeric(1)),
+      cfg_clusterDistance = vapply(trace, function(x) x$clusterDistance %||% NA_real_, numeric(1)),
+      cfg_useClusterMethod = vapply(trace, function(x) x$useClusterMethod %||% NA, logical(1)),
+      cfg_siteSelectionAsDistributing = vapply(trace, function(x) x$siteSelectionAsDistributing %||% NA_character_, character(1))
+    )
+
+  df %>%
+    left_join(config_tbl, by = "config_file") %>%
+    mutate(
+      totalDisturbanceRate = coalesce(as.numeric(totalDisturbanceRate), cfg_totalDisturbanceRate),
+      clusterDistance = coalesce(as.numeric(clusterDistance), cfg_clusterDistance),
+      useClusterMethod = coalesce(as.logical(useClusterMethod), cfg_useClusterMethod),
+      siteSelectionAsDistributing = coalesce(as.character(siteSelectionAsDistributing), cfg_siteSelectionAsDistributing)
+    ) %>%
+    select(-starts_with("cfg_"))
 }
 
 compute_ua_metrics_for_run <- function(run_row, ua_env) {
@@ -267,10 +442,89 @@ summarise_replicates <- function(df) {
     )
 }
 
+expected_years_by_run <- function(rep_years) {
+  if (!nrow(rep_years)) return(tibble())
+  rep_years <- rep_years %>%
+    mutate(year_key = vapply(years, function(x) paste(x, collapse = ","), character(1)))
+  rep_years %>%
+    group_by(run_name, year_key) %>%
+    summarise(
+      n_reps = n(),
+      years = list(first(years)),
+      years_len = lengths(years),
+      .groups = "drop"
+    ) %>%
+    arrange(run_name, desc(n_reps), desc(years_len), year_key) %>%
+    group_by(run_name) %>%
+    slice(1) %>%
+    ungroup() %>%
+    select(run_name, expected_years = years)
+}
+
+check_incomplete_replicates <- function(run_metrics, runs_df, run_label, allow_incomplete) {
+  rep_years <- run_metrics %>%
+    filter(!is.na(year)) %>%
+    distinct(run_name, replicate, seed, year) %>%
+    group_by(run_name, replicate, seed) %>%
+    summarise(years = list(sort(unique(year))), .groups = "drop")
+  if (!nrow(rep_years)) {
+    return(list(
+      run_metrics = run_metrics %>% mutate(replicate_status = "complete"),
+      complete_metrics = run_metrics
+    ))
+  }
+  expected <- expected_years_by_run(rep_years)
+  rep_status <- rep_years %>%
+    left_join(expected, by = "run_name") %>%
+    mutate(
+      missing_years = map2(years, expected_years, function(actual, expected) {
+        if (is.null(actual) || all(is.na(actual))) actual <- numeric()
+        if (is.null(expected) || all(is.na(expected))) expected <- numeric()
+        setdiff(expected, actual)
+      }),
+      replicate_status = if_else(lengths(missing_years) > 0, "incomplete", "complete")
+    )
+  incomplete <- rep_status %>%
+    filter(.data$replicate_status == "incomplete") %>%
+    mutate(
+      missing_years = vapply(missing_years, function(x) paste(x, collapse = ","), character(1))
+    )
+  if (nrow(incomplete)) {
+    run_lookup <- runs_df %>%
+      select(run_name, replicate, seed, output_path)
+    incomplete <- incomplete %>%
+      left_join(run_lookup, by = c("run_name", "replicate", "seed"))
+    qa_path <- write_qa_csv(
+      incomplete %>% select(run_name, replicate, seed, missing_years, output_path),
+      sprintf("ua_qc_incomplete_replicates_%s.csv", run_label)
+    )
+    if (!isTRUE(allow_incomplete)) {
+      stop(
+        sprintf("Incomplete replicates detected (%d). See %s.", nrow(incomplete), qa_path),
+        "Use --allow-incomplete-replicates to proceed (incomplete replicates flagged).",
+        call. = FALSE
+      )
+    }
+    warning(
+      sprintf("Incomplete replicates detected (%d). Proceeding with complete-only summaries (see %s).", nrow(incomplete), qa_path),
+      call. = FALSE
+    )
+  }
+  run_metrics <- run_metrics %>%
+    left_join(
+      rep_status %>% select(run_name, replicate, seed, replicate_status),
+      by = c("run_name", "replicate", "seed")
+    ) %>%
+    mutate(replicate_status = coalesce(replicate_status, "complete"))
+  complete_metrics <- run_metrics %>% filter(.data$replicate_status == "complete")
+  list(run_metrics = run_metrics, complete_metrics = complete_metrics)
+}
+
 main <- function() {
   opts <- parse_args()
   registry_path <- find_run_registry()
   design_path <- opts[["design-file"]]
+  base_config_path <- opts[["base-config"]]
   run_name <- opts$run_name
   run_names <- opts$run_names
   run_label <- make_run_label(run_names)
@@ -279,11 +533,25 @@ main <- function() {
   if (identical(opts$mode, "design") && (is.null(run_name) || is.na(run_name) || !nzchar(run_name))) {
     stop("In design mode, --run-name must be supplied to match the UA run folder.", call. = FALSE)
   }
-  runs_df <- read_runs_registry(registry_path, suite_val = suite, run_name_val = run_names)
+  runs_df <- read_runs_registry(
+    registry_path,
+    suite_val = suite,
+    run_name_val = run_names,
+    run_label = run_label,
+    allow_duplicates = opts$`allow-duplicate-run-rows`
+  )
   if (!nrow(runs_df)) stop("No successful runs found for suite=", suite, " run_name=", run_display, call. = FALSE)
   if (!"design_id" %in% names(runs_df)) runs_df$design_id <- NA_integer_
   if (opts$mode == "replicates") {
-    runs_df <- runs_df %>% mutate(design_id = 1L)
+    base_params <- read_base_config(base_config_path)
+    runs_df <- runs_df %>%
+      mutate(
+        design_id = 1L,
+        totalDisturbanceRate = base_params$totalDisturbanceRate,
+        clusterDistance = base_params$clusterDistance,
+        useClusterMethod = base_params$useClusterMethod,
+        siteSelectionAsDistributing = base_params$siteSelectionAsDistributing
+      )
   } else {
     design_df <- read_design_file(design_path)
     join_by <- if ("run_name" %in% names(design_df)) "run_name" else "design_id"
@@ -304,6 +572,7 @@ main <- function() {
       runs_df <- runs_df %>% filter(!is.na(design_id))
     }
   }
+  runs_df <- populate_traceability_from_configs(runs_df)
   ua_env <- load_helper_env(file.path(project_root, "workspace", "uncertainty", "ua_metrics.R"))
   if (is.null(ua_env)) stop("Failed to load workspace/uncertainty/ua_metrics.R helpers.", call. = FALSE)
 
@@ -338,13 +607,35 @@ main <- function() {
 
   if (!nrow(run_metrics)) stop("No metrics could be computed from available outputs.", call. = FALSE)
 
+  if (opts$mode == "replicates") {
+    qc <- check_incomplete_replicates(
+      run_metrics,
+      runs_df,
+      run_label = run_label,
+      allow_incomplete = opts$`allow-incomplete-replicates`
+    )
+    run_metrics <- qc$run_metrics
+    run_metrics_complete <- qc$complete_metrics
+  } else {
+    run_metrics_complete <- run_metrics
+  }
+
+  before_distinct <- nrow(run_metrics)
+  run_metrics <- run_metrics %>% distinct()
+  if (nrow(run_metrics) < before_distinct) {
+    warning(
+      sprintf("Removed %d exact duplicate metric rows as a final safeguard.", before_distinct - nrow(run_metrics)),
+      call. = FALSE
+    )
+  }
+
   results_dir <- file.path(project_root, "workspace", "uncertainty", "results")
   dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
   run_out_csv <- file.path(results_dir, sprintf("ua_run_metrics_%s.csv", run_label))
   readr::write_csv(run_metrics, run_out_csv)
 
   if (opts$mode == "replicates") {
-    rep_summary <- summarise_replicates(run_metrics)
+    rep_summary <- summarise_replicates(run_metrics_complete)
     rep_out_csv <- file.path(results_dir, sprintf("ua_replicates_summary_%s.csv", run_label))
     readr::write_csv(rep_summary, rep_out_csv)
     message(sprintf("Replicates summary written: %s", rep_out_csv))

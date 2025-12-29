@@ -172,7 +172,10 @@ first_non_na <- function(vals, default = NA_real_) {
   if (length(vals)) vals[[1]] else default
 }
 
-compute_yearly_new <- function(vals) {
+# NOTE: "yearly_new" historically represents interval increments between snapshots,
+# not per-year rates. Prefer interval/annualized metrics below; keep yearly_new as
+# a compatibility alias for interval increments.
+compute_interval_new <- function(vals) {
   if (!length(vals)) return(vals)
   out <- rep(NA_real_, length(vals))
   prev_obs <- NA_real_
@@ -186,6 +189,37 @@ compute_yearly_new <- function(vals) {
     } else {
       out[i] <- cur - prev_obs
       prev_obs <- cur
+    }
+  }
+  out
+}
+
+compute_yearly_new <- function(vals) {
+  compute_interval_new(vals)
+}
+
+compute_annualized_new <- function(vals, years) {
+  if (!length(vals)) return(vals)
+  if (length(vals) != length(years)) {
+    stop("Annualized computation requires matching values and years.", call. = FALSE)
+  }
+  out <- rep(NA_real_, length(vals))
+  prev_obs <- NA_real_
+  prev_year <- NA_real_
+  for (i in seq_along(vals)) {
+    cur <- vals[i]
+    yr <- years[i]
+    if (is.na(cur) || is.na(yr)) {
+      out[i] <- NA_real_
+    } else if (is.na(prev_obs) || is.na(prev_year)) {
+      out[i] <- NA_real_
+      prev_obs <- cur
+      prev_year <- yr
+    } else {
+      delta_years <- yr - prev_year
+      out[i] <- if (!is.na(delta_years) && delta_years != 0) (cur - prev_obs) / delta_years else NA_real_
+      prev_obs <- cur
+      prev_year <- yr
     }
   }
   out
@@ -298,7 +332,9 @@ metrics_from_output_dir <- function(output_dir, scenario_id, rep_id) {
   poly_dt <- sector_dt[geom_kind == "polygons"]
   if (nrow(poly_dt)) {
     data.table::setorder(poly_dt, sector, year)
-    poly_dt[, sector_yearly_new_area_km2 := compute_yearly_new(cumulative_area_km2), by = sector]
+    poly_dt[, sector_interval_new_area_km2 := compute_interval_new(cumulative_area_km2), by = sector]
+    poly_dt[, sector_yearly_new_area_km2 := sector_interval_new_area_km2]
+    poly_dt[, sector_annualized_new_area_km2 := compute_annualized_new(cumulative_area_km2, year), by = sector]
     out[["sector_yearly"]] <- poly_dt[, .(
       scenario_id = scenario_id,
       rep_id = rep_id,
@@ -306,6 +342,22 @@ metrics_from_output_dir <- function(output_dir, scenario_id, rep_id) {
       metric = "sector_yearly_new_area_km2",
       sector = sector,
       value = sector_yearly_new_area_km2
+    )]
+    out[["sector_interval"]] <- poly_dt[, .(
+      scenario_id = scenario_id,
+      rep_id = rep_id,
+      year = year,
+      metric = "sector_interval_new_area_km2",
+      sector = sector,
+      value = sector_interval_new_area_km2
+    )]
+    out[["sector_annualized"]] <- poly_dt[, .(
+      scenario_id = scenario_id,
+      rep_id = rep_id,
+      year = year,
+      metric = "sector_annualized_new_area_km2",
+      sector = sector,
+      value = sector_annualized_new_area_km2
     )]
     out[["sector_current_area"]] <- poly_dt[, .(
       scenario_id = scenario_id,
@@ -316,11 +368,35 @@ metrics_from_output_dir <- function(output_dir, scenario_id, rep_id) {
       value = cumulative_area_km2
     )]
     totals <- poly_dt[, .(value = sum(sector_yearly_new_area_km2, na.rm = TRUE)), by = year]
+    totals_interval <- poly_dt[, .(value = sum(sector_interval_new_area_km2, na.rm = TRUE)), by = year]
+    totals_annualized <- poly_dt[, .(
+      value = if (all(is.na(sector_annualized_new_area_km2))) {
+        NA_real_
+      } else {
+        sum(sector_annualized_new_area_km2, na.rm = TRUE)
+      }
+    ), by = year]
     out[["total_yearly"]] <- totals[, .(
       scenario_id = scenario_id,
       rep_id = rep_id,
       year = year,
       metric = "total_yearly_new_area_km2",
+      sector = NA_character_,
+      value = value
+    )]
+    out[["total_interval"]] <- totals_interval[, .(
+      scenario_id = scenario_id,
+      rep_id = rep_id,
+      year = year,
+      metric = "total_interval_new_area_km2",
+      sector = NA_character_,
+      value = value
+    )]
+    out[["total_annualized"]] <- totals_annualized[, .(
+      scenario_id = scenario_id,
+      rep_id = rep_id,
+      year = year,
+      metric = "total_annualized_new_area_km2",
       sector = NA_character_,
       value = value
     )]
@@ -467,9 +543,17 @@ summarize_metrics <- function(dt) {
 
 derive_shape_metrics <- function(dt, enable_shape) {
   if (!isTRUE(enable_shape) || !nrow(dt)) return(dt)
-  needed <- c("sector_patch_count", "sector_yearly_new_area_km2")
-  if (!all(needed %in% unique(dt$metric))) return(dt)
-  total_area <- dt[metric == "sector_yearly_new_area_km2", .(area = value), by = .(scenario_id, rep_id, year, sector)]
+  metric_set <- unique(dt$metric)
+  area_metric <- if ("sector_interval_new_area_km2" %in% metric_set) {
+    "sector_interval_new_area_km2"
+  } else if ("sector_yearly_new_area_km2" %in% metric_set) {
+    "sector_yearly_new_area_km2"
+  } else {
+    return(dt)
+  }
+  needed <- c("sector_patch_count", area_metric)
+  if (!all(needed %in% metric_set)) return(dt)
+  total_area <- dt[metric == area_metric, .(area = value), by = .(scenario_id, rep_id, year, sector)]
   patch_counts <- dt[metric == "sector_patch_count"]
   merged <- merge(patch_counts, total_area, by = c("scenario_id", "rep_id", "year", "sector"), all.x = TRUE)
   merged[, value := ifelse(!is.na(area) & area > 0, value / area, NA_real_)]
@@ -481,7 +565,7 @@ derive_shape_metrics <- function(dt, enable_shape) {
 aggregate_metrics <- function(dt, from_year, to_year) {
   if (!nrow(dt) || is.na(from_year) || is.na(to_year)) return(dt)
   if (!any(dt$year >= from_year & dt$year <= to_year, na.rm = TRUE)) return(dt)
-  sum_patterns <- c("yearly_new", "total_yearly", "current_total", "total_current")
+  sum_patterns <- c("yearly_new", "interval_new", "total_yearly", "total_interval", "current_total", "total_current")
   end_patterns <- c("patch_density", "nn_distance", "segment_length", "patch_area", "patch_count_per_km2_new", "segment_count")
   sum_dt <- dt[
     year >= from_year & year <= to_year & sapply(metric, function(m) any(grepl(sum_patterns, m))),

@@ -1,6 +1,10 @@
 #!/usr/bin/env Rscript
 # Collate Morris run outputs, compute per-run disturbance metrics, and
 # summarise across replicates for each design point.
+#
+# Note (2025-12): `polygon_patch_density_per_100km2` is computed per 100 km² of
+# disturbed polygon area (not total study area). The metric_id is renamed to
+# `polygon_patch_density_per_100km2_disturbed` to avoid misinterpretation.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -23,13 +27,83 @@ as_logical_flag <- function(x) {
 
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
+default_opts <- list(
+  runs_path = file.path(project_root, "workspace", "sensitivity", "runs.csv"),
+  results_dir = file.path(project_root, "outputs", "sensitivity", "results"),
+  help = FALSE
+)
+
+normalize_path <- function(path) {
+  if (is.null(path) || isTRUE(is.na(path)) || !nzchar(path)) return(NA_character_)
+  if (file.exists(path) || dir.exists(path)) return(path)
+  alt <- file.path(project_root, path)
+  if (file.exists(alt) || dir.exists(alt)) return(alt)
+  path
+}
+
+parse_cli_args <- function(args) {
+  opts <- default_opts
+  if (!length(args)) return(opts)
+
+  i <- 1
+  while (i <= length(args)) {
+    arg <- args[[i]]
+    if (arg %in% c("--help", "-h")) {
+      opts$help <- TRUE
+      i <- i + 1
+      next
+    }
+
+    if (grepl("^--runs=", arg, ignore.case = TRUE)) {
+      opts$runs_path <- sub("^--runs=", "", arg, ignore.case = TRUE)
+      i <- i + 1
+      next
+    }
+    if (arg %in% c("--runs")) {
+      opts$runs_path <- args[[i + 1]]
+      i <- i + 2
+      next
+    }
+
+    if (grepl("^--results-dir=", arg, ignore.case = TRUE) || grepl("^--results_dir=", arg, ignore.case = TRUE)) {
+      opts$results_dir <- sub("^--results[-_]dir=", "", arg, ignore.case = TRUE)
+      i <- i + 1
+      next
+    }
+    if (arg %in% c("--results-dir", "--results_dir")) {
+      opts$results_dir <- args[[i + 1]]
+      i <- i + 2
+      next
+    }
+
+    warning(sprintf("Ignoring unrecognized argument: %s", arg), call. = FALSE)
+    i <- i + 1
+  }
+  opts
+}
+
+print_usage <- function() {
+  cat(paste0(
+    "Usage: Rscript workspace/sensitivity/collect_morris_metrics.R [options]\n",
+    "  --runs=PATH         runs.csv path (default workspace/sensitivity/runs.csv)\n",
+    "  --results-dir=PATH  output directory for results (default outputs/sensitivity/results)\n",
+    "  --help              Show this message\n"
+  ))
+}
+
+opts <- parse_cli_args(commandArgs(trailingOnly = TRUE))
+if (opts$help) {
+  print_usage()
+  quit(save = "no", status = 0, runLast = FALSE)
+}
+
 design_candidates <- c(
   file.path(project_root, "workspace", "sensitivity", "morris_design_points.csv"),
   file.path(project_root, "workspace", "sensitivity", "config", "morris_design_points.csv")
 )
-runs_path <- file.path(project_root, "workspace", "sensitivity", "runs.csv")
+runs_path <- normalize_path(opts$runs_path)
 config_dir <- file.path(project_root, "workspace", "sensitivity", "config", "generated")
-results_dir <- file.path(project_root, "outputs", "sensitivity", "results")
+results_dir <- normalize_path(opts$results_dir)
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 site_levels <- c(
@@ -227,6 +301,17 @@ infer_changed_parameter <- function(df, param_cols) {
   out
 }
 
+is_seismic_sector <- function(sector) {
+  is.character(sector) && grepl("seismicLines", sector, fixed = TRUE)
+}
+
+estimate_line_length_from_buffered_polygons <- function(geom, buffer_width_m = 3) {
+  # Approximate centerline length from buffered line polygons (buffer width in meters).
+  areas_m2 <- as.numeric(sf::st_area(geom))
+  length_m <- (areas_m2 - pi * buffer_width_m^2) / (2 * buffer_width_m)
+  ifelse(is.na(length_m) | length_m < 0, NA_real_, length_m)
+}
+
 read_sector_stats <- function(output_dir) {
   shp_files <- list.files(output_dir, pattern = "^disturbances_.*\\.shp$", full.names = TRUE)
   if (!length(shp_files)) return(tibble())
@@ -243,7 +328,26 @@ read_sector_stats <- function(output_dir) {
     }
     gtype <- unique(as.character(sf::st_geometry_type(geom)))
     kind <- if (any(grepl("POLYGON", gtype))) "polygons" else if (any(grepl("LINE", gtype))) "lines" else "other"
-    if (identical(kind, "polygons")) {
+    is_seismic <- is_seismic_sector(sector)
+    if (is_seismic && identical(kind, "polygons")) {
+      lengths_m <- estimate_line_length_from_buffered_polygons(geom, buffer_width_m = 3)
+      segment_count <- sum(!is.na(lengths_m))
+      cumulative_length_km <- sum(lengths_m, na.rm = TRUE) / 1000
+      tibble(
+        sector = sector,
+        year = year,
+        geom_kind = "lines",
+        cumulative_area_km2 = NA_real_,
+        cumulative_length_km = cumulative_length_km,
+        patch_count = NA_real_,
+        mean_patch_area_km2 = NA_real_,
+        median_patch_area_km2 = NA_real_,
+        patch_density_per_100km2 = NA_real_,
+        segment_count = segment_count,
+        mean_segment_length_km = if (segment_count > 0) mean(lengths_m, na.rm = TRUE) / 1000 else NA_real_,
+        median_segment_length_km = if (segment_count > 0) median(lengths_m, na.rm = TRUE) / 1000 else NA_real_
+      )
+    } else if (identical(kind, "polygons")) {
       areas <- as.numeric(sf::st_area(geom)) / 1e6
       patch_count <- sum(!is.na(areas))
       cumulative_area_km2 <- sum(areas, na.rm = TRUE)
@@ -315,7 +419,7 @@ aggregate_metrics <- function(sector_stats, years_of_interest = NULL) {
       metric_id = c(
         "total_polygon_area_km2",
         "total_linear_length_km",
-        "polygon_patch_density_per_100km2",
+        "polygon_patch_density_per_100km2_disturbed",
         "polygon_mean_patch_area_km2",
         "polygon_patch_count",
         "line_segment_count",
@@ -344,6 +448,7 @@ compute_run_metrics <- function(run_row) {
   if (!nrow(metrics)) return(tibble())
   metrics %>%
     mutate(
+      run_name = run_row$run_name,
       design_id = run_row$design_id,
       run_id = run_row$run_id,
       seed = run_row$seed,
@@ -380,7 +485,7 @@ main <- function() {
   runs_joined <- runs_df %>%
     left_join(design_df %>% rename(run_name = scenario_id), by = "run_name") %>%
     mutate(output_exists = dir.exists(output_path)) %>%
-    filter(status == "success" | output_exists)
+    filter(status == "success")
 
   if (any(is.na(runs_joined$design_id))) {
     dropped <- sum(is.na(runs_joined$design_id))

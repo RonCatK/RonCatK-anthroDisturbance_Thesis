@@ -30,6 +30,37 @@ This folder mirrors the validation SA workflow but targets the new generic `work
 4. **Analyse**  
    The design metadata (`morris_design_points.csv`) aligns trajectory/point indices with the parameter values injected into each run. Feed outputs + design to your UA/SA metric scripts as needed.
 
+   For the thesis-facing Morris results (including reruns), use the finalize script which:
+   - recollects run metrics from `runs.csv`
+   - rebuilds the executed design from YAML configs
+   - computes step QC + Morris EEs only for `n_changed == 1`
+   - writes `*_FIXED.csv` outputs used by downstream reporting
+
+   ```
+   Rscript validation/sensitivity/finalize_morris_salvage.R \
+     --runs workspace/sensitivity/runs.csv \
+     --outputs_dir outputs \
+     --results_dir outputs/sensitivity/results
+   ```
+
+   Key outputs:
+   - `outputs/sensitivity/results/morris_step_qc.csv`
+   - `outputs/sensitivity/results/morris_design_executed.csv`
+   - `outputs/sensitivity/results/morris_elementary_effects_long_FIXED.csv`
+   - `outputs/sensitivity/results/morris_effects_long_FIXED.csv`
+   - `outputs/sensitivity/results/morris_qc_summary.csv` + `outputs/sensitivity/results/morris_qc_summary.md`
+   - `outputs/sensitivity/figures/morris_mu_star_sigma_by_metric_year.png` (and a version excluding `useClusterMethod`)
+   - `outputs/sensitivity/results/useClusterMethod_scenario_comparison.csv`
+   - `outputs/sensitivity/results/useClusterMethod_regression_summary.csv`
+
+## Metric interpretation note (seismic lines)
+
+The generator writes seismic-line disturbances with different geometries depending on `useClusterMethod`:
+- `useClusterMethod = FALSE` ⇒ seismic lines are exported as buffered polygons.
+- `useClusterMethod = TRUE` ⇒ seismic lines are exported as lines.
+
+This switch happens in `modules/anthroDisturbance_Generator/R/generateDisturbancesShp.R:1711`. To keep Morris metrics comparable, `collect_morris_metrics.R` now converts polygon seismic lines to line-equivalent lengths (buffer width = 3 m) and treats them as “linear” metrics regardless of geometry.
+
 ## Parameter constraints / sanitization
 
 The generator ignores some knobs depending on the mode. The Morris builder now strips incompatible fields automatically when writing configs:

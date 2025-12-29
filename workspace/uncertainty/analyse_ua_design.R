@@ -63,7 +63,7 @@ is_blank_scalar <- function(x) {
 
 key_metrics <- tibble::tribble(
   ~metric_id, ~sector, ~year, ~friendly, ~y_label,
-  "total_yearly_new_area_km2", NA_character_, 2031, "Total yearly new area (cum 2011-2041 proxy)", "Area (km^2)",
+  "total_interval_new_area_km2", NA_character_, 2031, "Total interval new area (2011-2031 increment)", "Area (km^2)",
   "sector_current_total_area_km2", "forestry_cutblocks", 2031, "Forestry cutblocks total area (2041)", "Area (km^2)",
   "sector_current_total_area_km2", "settlements_settlements", 2031, "Settlements total area (2041)", "Area (km^2)",
   "sector_current_total_length_km", "oilGas_seismicLines", 2031, "Oil & gas seismic line length (2041)", "Length (km)"
