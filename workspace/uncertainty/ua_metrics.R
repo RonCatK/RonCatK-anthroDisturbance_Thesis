@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # UA metrics collector (workspace version)
-# Reads workspace/uncertainty runs registry, computes per-replicate disturbance metrics,
+# Reads outputs/traceability suite runs registry, computes per-replicate disturbance metrics,
 # summarises across replicates, and writes run-level outputs under outputs/uncertainty/results.
 
 suppressPackageStartupMessages({
@@ -16,8 +16,8 @@ option_list <- list(
   optparse::make_option(
     "--runs-csv",
     type = "character",
-    default = file.path(project_root, "workspace", "uncertainty", "runs.csv"),
-    help = "Run registry CSV (default workspace/uncertainty/runs.csv)."
+    default = file.path(project_root, "outputs", "traceability", "suite_runs", "uncertainty_runs.csv"),
+    help = "Run registry CSV (default outputs/traceability/suite_runs/uncertainty_runs.csv)."
   ),
   optparse::make_option(
     "--suite",

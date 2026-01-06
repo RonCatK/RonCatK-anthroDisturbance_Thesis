@@ -11,7 +11,7 @@ The repo follows a strict layout. See `docs/repo_structure.md` for what belongs 
 Clone with submodules and restore the R environment:
 
 ```bash
-git clone --recurse-submodules <repo-url>
+git clone --recurse-submodules https://github.com/RonCatK/RonCatK-anthroDisturbance_Thesis.git
 cd RonCatK-anthroDisturbance_Thesis
 Rscript -e 'renv::restore()'
 ```
@@ -27,28 +27,7 @@ Rscript workspace/helpers/generate_traceability_matrix.R
 Fetch the core data archive (recommended for reproducing the thesis inputs):
 
 ```bash
-bash workspace/helpers/fetch_core_data.sh --url <CORE_ARCHIVE_URL>
-Rscript workspace/helpers/prepare_data.R --profile=raw,bead,synthetic --verify-only
-```
-
-See `docs/data_packaging.md` for the full data packaging workflow.
-
-If you prefer to download from the original sources instead of a packaged archive:
-
-```bash
 Rscript workspace/helpers/prepare_data.R --profile=all
-```
-
-Smoke-test the end-to-end wiring (lightweight, no heavy runs):
-
-```bash
-bash workspace/run_smoke_test.sh
-```
-
-Run a dummy end-to-end pass with synthetic inputs (no metrics, no large downloads):
-
-```bash
-bash workspace/run_end_to_end_dummy.sh
 ```
 
 Run the full end-to-end pipeline (runs data prep unless you skip it):
@@ -63,7 +42,7 @@ Use `bash workspace/run_end_to_end.sh --skip=prep,sa` (comma-separated) to omit 
 
 - Editable spec: `docs/traceability/traceability_requirements.csv`
 - CSV output: `docs/traceability/traceability_matrix.csv`
-- Human-readable table: `docs/traceability/traceability_matrix.md`
+- MD table: `docs/traceability/traceability_matrix.md`
 - Evidence snapshots: `docs/traceability/evidence/`
 
 See `docs/traceability/README.md` for details.

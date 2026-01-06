@@ -40,7 +40,7 @@ print_usage <- function() {
     "Usage: Rscript workspace/adqd_validation/run_adqd_metrics.R [options]\n",
     "  --config-dir=DIR   Config directory (default workspace/adqd_validation/config)\n",
     "  --bead-root=DIR    BEAD archive root (default data/raw/ECCC)\n",
-    "  --mode=default|all  default = verification/holdout (+ caribou); all = include decadal/2015-2020/map run\n",
+    "  --mode=default|all  default = verification/holdout (+ caribou); all = include map helper configs\n",
     "  --dry-run          Print planned compute_map_metrics calls only\n",
     "  --help             Show this message\n"
   ))

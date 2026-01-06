@@ -112,7 +112,7 @@ sitesel_runs <- parse_run_names(opts$`sitesel-runs`)
 if (!length(random_runs)) stop("At least one --random-runs value is required.", call. = FALSE)
 if (!length(sitesel_runs)) stop("At least one --sitesel-runs value is required.", call. = FALSE)
 
-runs_csv <- file.path(project_root, "workspace", "uncertainty", "runs.csv")
+runs_csv <- file.path(project_root, "outputs", "traceability", "suite_runs", "uncertainty_runs.csv")
 if (!file.exists(runs_csv)) stop("Run registry not found: ", runs_csv, call. = FALSE)
 
 design_file <- normalize_path(opts$`design-file`)

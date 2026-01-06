@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Keep going even if a single replicate fails; the runner writes status=error
-# to runs.csv, so we just log and continue.
+# to outputs/traceability/suite_runs/sensitivity_runs.csv, so we just log and continue.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CFG_DIR="${ROOT}/sensitivity/config/generated"

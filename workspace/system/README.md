@@ -6,7 +6,7 @@ The system suite stress-tests the anthroDisturbance workflow across a curated se
 
 - `config/system_*.yaml` – runner configs, one per scenario.
 - `run_system.sh` – thin orchestrator that loops over every config (or subsets by status).
-- `runs.csv` – append-only log populated by `workspace/runner.R`, one row per replicate.
+- `runs.csv` – append-only log populated by `workspace/runner.R`, one row per replicate (stored under `outputs/traceability/suite_runs/system_runs.csv`).
 
 Successful runs emit outputs into `outputs/system/<run_name>/rep_XXX` with logs in `scratch/system/<run_name>/rep_XXX.log`.
 
@@ -23,7 +23,7 @@ bash workspace/system/run_system.sh --mode=failed
 bash workspace/system/run_system.sh --mode=missing
 ```
 
-The wrapper inspects `workspace/system/runs.csv` to decide what to execute. Internally it calls:
+The wrapper inspects `outputs/traceability/suite_runs/system_runs.csv` to decide what to execute. Internally it calls:
 
 ```bash
 Rscript workspace/runner.R workspace/system/config/system_cluster_dense_connectors.yaml
@@ -35,6 +35,6 @@ Feel free to invoke the runner manually with any config for ad-hoc debugging or 
 
 1. Copy an existing `system_*.yaml` into `workspace/system/config/`.
 2. Update `run_name`, `description`, and any module parameters (`anthroDisturbance_Generator` is the usual focus).
-3. Run via `run_system.sh` or the runner directly. The new row shows up in `workspace/system/runs.csv` once the run finishes.
+3. Run via `run_system.sh` or the runner directly. The new row shows up in `outputs/traceability/suite_runs/system_runs.csv` once the run finishes.
 
 Keep run names short but descriptive; the outputs/log folders mirror this identifier, making it easy to diff results across branches.

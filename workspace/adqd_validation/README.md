@@ -3,8 +3,10 @@
 This suite reproduces the anthropogenic disturbance (AD) and quadratic disagreement (QD) verification runs that fed the thesis analysis. Canned runner configs live under `config/`:
 
 - `adqd_verification.yaml` – 2010–2020 rerun (full NWT) using calibration-period rates.
+- `adqd_verification_caribou.yaml` – verification run with 500 m buffer convention.
 - `adqd_holdout.yaml` – 2010–2020 rerun (full NWT) seeded off the hold-out tuning set.
-`workspace/runner.R` sews these configs into the unified logging/outputs conventions. Successful runs drop results under `outputs/adqd_validation/<RUN_NAME>/rep_xxx` with logs under `scratch/adqd_validation/<RUN_NAME>/rep_xxx.log`. The aggregated status table lives in `workspace/adqd_validation/runs.csv`.
+- `adqd_holdout_caribou.yaml` – hold-out run with 500 m buffer convention.
+`workspace/runner.R` sews these configs into the unified logging/outputs conventions. Successful runs drop results under `outputs/adqd_validation/<RUN_NAME>/rep_xxx` with logs under `scratch/adqd_validation/<RUN_NAME>/rep_xxx.log`. The aggregated status table lives in `outputs/traceability/suite_runs/adqd_validation_runs.csv`.
 
 ## Running the scenarios
 
@@ -38,7 +40,7 @@ To batch metrics for the core scenarios (verification/holdout + caribou buffers)
 Rscript workspace/adqd_validation/run_adqd_metrics.R
 ```
 
-Use `--mode=all` to include decadal and 2015–2020 hold-out configs, and `--bead-root=DIR` if your BEAD archives live elsewhere.
+Use `--mode=all` to include the map-helper config, and `--bead-root=DIR` if your BEAD archives live elsewhere.
 
 BEAD 2020 data is not hosted in this repo. Place `NorthwestTerritories2020.gdb.zip` (or prevalidated `NWT2020_Disturb_Perturb_*_valid.gpkg`) under `data/raw/ECCC`, or supply a URL via `workspace/helpers/prepare_data.R --bead-2020-url=...`.
 
@@ -58,7 +60,7 @@ Simulated year selection:
 - By default, intervals use the `increment` rule (year > baseline && year <= comparison); override with `--year-rule=exact`.
 - Selections are recorded in `sim_file_index.csv` alongside `run_metadata.csv` so interval provenance is explicit.
 
-Outputs (CSV/GeoPackage) land under `outputs/adqd_validation/results/<ANALYSIS_MODE>` (default) and are organized by interval + replicate. Pair those summaries with `runs.csv` to look up seeds and log paths. The default results path follows the suite convention, so `compute_map_metrics.R` alone produces the final metrics.
+Outputs (CSV/GeoPackage) land under `outputs/adqd_validation/results/<ANALYSIS_MODE>` (default) and are organized by interval + replicate. Pair those summaries with `outputs/traceability/suite_runs/adqd_validation_runs.csv` to look up seeds and log paths. The default results path follows the suite convention, so `compute_map_metrics.R` alone produces the final metrics.
 
 Key output conventions:
 

@@ -461,7 +461,7 @@ write_crosswalk_file <- function(crosswalk, output_dir) {
 
 extract_gdb <- function(archive_path, label = "NWT2020") {
   archive_path <- normalize_existing_path(archive_path, mustExist = TRUE)
-  cache_dir <- file.path(project_root, "cache", "adqd_validation", "bead_gdb")
+  cache_dir <- file.path(project_root, "scratch", "cache", "adqd_validation", "bead_gdb")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
   target_dir <- file.path(cache_dir, label)
   gdb_dirs <- if (dir.exists(target_dir)) {

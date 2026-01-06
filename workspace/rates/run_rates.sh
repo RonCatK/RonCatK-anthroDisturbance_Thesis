@@ -2,10 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_ROOT="$(cd "${ROOT}/.." && pwd)"
 SUITE_DIR="${ROOT}/rates"
 CONFIG_DIR="${SUITE_DIR}/config"
 RUNNER="${ROOT}/runner.R"
-RUNS_CSV="${SUITE_DIR}/runs.csv"
+RUNS_CSV="${PROJECT_ROOT}/outputs/traceability/suite_runs/rates_runs.csv"
 
 if [[ ! -f "${RUNNER}" ]]; then
   echo "runner not found at ${RUNNER}" >&2
@@ -22,8 +23,8 @@ usage() {
 Usage: $(basename "$0") [--mode=all|failed|missing]
 
   --mode=all      run every config (default)
-  --mode=failed   rerun configs whose last entry in workspace/rates/runs.csv errored
-  --mode=missing  run configs that have no entry in workspace/rates/runs.csv
+  --mode=failed   rerun configs whose last entry in outputs/traceability/suite_runs/rates_runs.csv errored
+  --mode=missing  run configs that have no entry in outputs/traceability/suite_runs/rates_runs.csv
 EOF
   exit 1
 }

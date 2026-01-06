@@ -46,7 +46,7 @@ Rscript workspace/helpers/build_probability_disturbance.R
 
 ## `export_qgis_package.R`
 
-Harvests the latest successful AD/QD run (per `workspace/adqd_validation/runs.csv`), snaps/cleans geometries, and builds a QGIS-ready GeoPackage + layer manifest under `scratch/qgis_packages/<timestamp>`. Optional buffers and sliver filters keep the export stable for comparison in QGIS/Arc. Use this when stakeholders need quick map packages without unpacking the full outputs tree.
+Harvests the latest successful AD/QD run (per `outputs/traceability/suite_runs/adqd_validation_runs.csv`), snaps/cleans geometries, and builds a QGIS-ready GeoPackage + layer manifest under `scratch/qgis_packages/<timestamp>`. Optional buffers and sliver filters keep the export stable for comparison in QGIS/Arc. Use this when stakeholders need quick map packages without unpacking the full outputs tree.
 
 ```bash
 Rscript workspace/helpers/export_qgis_package.R

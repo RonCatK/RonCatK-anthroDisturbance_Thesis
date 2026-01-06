@@ -29,7 +29,7 @@
 # - Supplies disturbanceDT with local file:// URLs so prep modules do not
 #   re-download data already present.
 # - Captures console + message output to per-replicate log files under scratch.
-# - Appends one row per replicate to workspace/runs.csv with status & paths.
+# - Appends one row per replicate to outputs/traceability/suite_runs/<suite>_runs.csv with status & paths.
 
 suppressPackageStartupMessages({
   required <- c(
@@ -633,7 +633,7 @@ append_run_log <- function(row, suite, runs_csv_path = NULL) {
   if (length(missing_cols)) {
     stop("append_run_log: missing columns: ", paste(missing_cols, collapse = ", "), call. = FALSE)
   }
-  runs_csv <- runs_csv_path %||% file.path(project_root, "workspace", suite, "runs.csv")
+  runs_csv <- runs_csv_path %||% file.path(project_root, "outputs", "traceability", "suite_runs", paste0(suite, "_runs.csv"))
   ensure_dir(dirname(runs_csv))
   df <- as.data.frame(row[cols], stringsAsFactors = FALSE)
   write.table(
@@ -677,7 +677,7 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
     spades.DTthreads = runner_core_budget$per_job,
     reproducible.inputPaths = cfg$paths$input_root,
     reproducible.destinationPath = cfg$paths$input_root,
-    reproducible.cachePath = file.path(project_root, "cache", "workspace"),
+    reproducible.cachePath = file.path(project_root, "scratch", "cache", "workspace"),
     reproducible.overwrite = TRUE,
     reproducible.checkHash = FALSE,
     reproducible.useCloud = FALSE,
@@ -931,7 +931,7 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
         inputPath   = cfg$paths$input_root,
         outputPath  = output_dir,
         scratchPath = scratch_dir,
-        cachePath   = file.path(project_root, "cache", "workspace")
+        cachePath   = file.path(project_root, "scratch", "cache", "workspace")
       ),
       objects = obj_list
     )
@@ -1014,9 +1014,13 @@ should_launch_live_maps <- function(cfg) {
 
 launch_live_maps <- function(sim, cfg, replicate_id = NULL) {
   if (is.null(sim)) return(invisible())
-  if (!requireNamespace("SpaDES.shiny", quietly = TRUE)) {
+  pkg <- "SpaDES.shiny"
+  if (!requireNamespace(pkg, quietly = TRUE)) {
     stop(
-      "Live maps require the SpaDES.shiny package; install it with install.packages('SpaDES.shiny').",
+      sprintf(
+        "Live maps require the %s package; install it with renv::install(\"PredictiveEcology/SpaDES.shiny\").",
+        pkg
+      ),
       call. = FALSE
     )
   }
@@ -1030,8 +1034,9 @@ launch_live_maps <- function(sim, cfg, replicate_id = NULL) {
       title <- sprintf("%s (replicate %03d)", title, rep_str)
     }
   }
-  message("Launching SpaDES.shiny::shine() for live maps of ", cfg$run_name, ".")
-  SpaDES.shiny::shine(
+  message("Launching live maps for ", cfg$run_name, ".")
+  shine <- getFromNamespace("shine", pkg)
+  shine(
     sim,
     title = title,
     debug = cfg$live_maps$debug,
@@ -1060,7 +1065,7 @@ tryCatch({
 
   ensure_dir(cfg$paths$output_root)
   ensure_dir(cfg$paths$scratch_root)
-  cache_root <- ensure_dir(file.path(project_root, "cache", "workspace"))
+  cache_root <- ensure_dir(file.path(project_root, "scratch", "cache", "workspace"))
 
   checksums <- load_checksums(cfg$paths$input_root)
   verify_inputs(checksums, cfg$input_behaviour$allow_download_if_missing)

@@ -47,7 +47,7 @@ input_behaviour:
   allow_download_if_missing: false
 ```
 
-- `suite` drives folder conventions (`outputs/<suite>/<run_name>/rep_*`, `scratch/<suite>/<run_name>/rep_*.log`, `workspace/<suite>/runs.csv`).
+- `suite` drives folder conventions (`outputs/<suite>/<run_name>/rep_*`, `scratch/<suite>/<run_name>/rep_*.log`, `outputs/traceability/suite_runs/<suite>_runs.csv`).
 - `paths` can be omitted to fall back to `outputs`, `scratch`, and `modules` in the repo root.
 - `metadata` is copied verbatim into `runs.csv` so you can track additional labels.
 - `seed_base` expands to a deterministic seed per replicate (`seed_base + rep_idx - 1`). Alternatively provide a `seeds` vector matching `n_reps`.

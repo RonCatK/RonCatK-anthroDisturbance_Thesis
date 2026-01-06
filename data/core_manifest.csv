@@ -18,5 +18,5 @@ data/raw/Timberworks_LandUsePermitArea.zip,raw,https://drive.google.com/file/d/1
 data/raw/CutblocksHistory_UpdatedJan2022.zip,raw,https://drive.google.com/file/d/1vBI1uJ7kWXFoETBvqUMac1xgFntJ0eI2/view?usp=sharing,"Cutblocks history."
 data/raw/ECCC/Boreal-ecosystem-anthropogenic-disturbance-vector-data-2008-2010.zip,bead,https://www.ec.gc.ca/data_donnees/STB-DGST/003/Boreal-ecosystem-anthropogenic-disturbance-vector-data-2008-2010.zip,"BEAD 2010 archive."
 data/raw/ECCC/ECCC_2015_anthro_dist_corrected_to_NT1_2016_final.zip,bead,https://drive.google.com/file/d/1sxAa0wwwt7iwiHD7zB0DDnjfqyIQjKI2,"BEAD 2015 archive."
-data/raw/ECCC/NorthwestTerritories2020.gdb.zip,bead,manual,"BEAD 2020 archive; provide via workspace/helpers/prepare_data.R --bead-2020-url or bundle in core package."
+data/raw/ECCC/NorthwestTerritories2020.gdb.zip,bead,https://drive.google.com/file/d/140i9EPTciWSBRN1HSLWKCOIsXG30bBjE/view?usp=sharing,"BEAD 2020 archive."
 data/synthetic/rates/,synthetic,generated,"Synthetic rates fixtures (see data/synthetic/rates/synthetic_inputs/CHECKSUMS.txt)."

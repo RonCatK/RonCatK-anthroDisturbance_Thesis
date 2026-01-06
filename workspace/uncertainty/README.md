@@ -75,7 +75,7 @@ Rscript workspace/runner.R workspace/uncertainty/config/ua_base.yaml
 
 Outputs: `outputs/uncertainty/<run_name>/rep_*`  
 Logs: `scratch/uncertainty/<run_name>/rep_*.log`  
-Run index: appended to `workspace/uncertainty/runs.csv` by `runner.R`.
+Run index: appended to `outputs/traceability/suite_runs/uncertainty_runs.csv` by `runner.R`.
 
 ## Notes
 

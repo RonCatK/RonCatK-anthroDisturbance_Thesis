@@ -57,13 +57,15 @@ copy_if_exists <- function(src, dst) {
   invisible(ok)
 }
 
-# ---- Snapshot workspace/*/runs.csv (suite execution log) ----
-runs_files <- Sys.glob(file.path("workspace", "*", "runs.csv"))
+# ---- Snapshot outputs/traceability/suite_runs/*_runs.csv (suite execution log) ----
+runs_root <- file.path("outputs", "traceability", "suite_runs")
+runs_files <- Sys.glob(file.path(runs_root, "*_runs.csv"))
 if (!length(runs_files)) {
-  record_copy("", file.path(out_runs, "<suite>_runs.csv"), FALSE, "no workspace/*/runs.csv found")
+  record_copy("", file.path(out_runs, "<suite>_runs.csv"), FALSE, "no outputs/traceability/suite_runs/*_runs.csv found")
 } else {
   for (src in sort(runs_files)) {
-    suite <- basename(dirname(src))
+    base <- basename(src)
+    suite <- sub("_runs\\.csv$", "", base)
     if (suite %in% c("rates")) next
     dst <- file.path(out_runs, paste0(suite, "_runs.csv"))
     copy_if_exists(src, dst)

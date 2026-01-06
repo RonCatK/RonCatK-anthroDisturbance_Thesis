@@ -25,7 +25,7 @@ This folder mirrors the validation SA workflow but targets the new generic `work
      Rscript workspace/runner.R "$cfg"
    done
    ```
-   Outputs go to `outputs/sensitivity/<run_name>/rep_*`; logs to `scratch/sensitivity/<run_name>/rep_*.log`; runs.csv rows append to `workspace/sensitivity/runs.csv`.
+   Outputs go to `outputs/sensitivity/<run_name>/rep_*`; logs to `scratch/sensitivity/<run_name>/rep_*.log`; runs.csv rows append to `outputs/traceability/suite_runs/sensitivity_runs.csv`.
 
 4. **Analyse**  
    The design metadata (`morris_design_points.csv`) aligns trajectory/point indices with the parameter values injected into each run. Feed outputs + design to your UA/SA metric scripts as needed.
@@ -34,7 +34,7 @@ This folder mirrors the validation SA workflow but targets the new generic `work
 
    ```
    Rscript workspace/sensitivity/finalize_morris_metrics.R \
-     --runs workspace/sensitivity/runs.csv \
+     --runs outputs/traceability/suite_runs/sensitivity_runs.csv \
      --results_dir outputs/sensitivity/results
    ```
 

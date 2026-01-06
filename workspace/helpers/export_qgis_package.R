@@ -325,7 +325,7 @@ write_difference_layers <- function(run_id, gpkg_path, env, input_coll, output_c
 }
 
 # --- choose latest successful adqd_validation run ----------------------------
-runs_path <- file.path(project_root, "workspace", "adqd_validation", "runs.csv")
+runs_path <- file.path(project_root, "outputs", "traceability", "suite_runs", "adqd_validation_runs.csv")
 if (!file.exists(runs_path)) stop("runs.csv not found: ", runs_path)
 runs_dt <- fread(runs_path)
 if (!nrow(runs_dt)) stop("runs.csv is empty: ", runs_path)

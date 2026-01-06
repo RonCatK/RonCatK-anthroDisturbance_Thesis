@@ -128,11 +128,11 @@ write_qa_csv <- function(df, filename) {
 
 find_run_registry <- function() {
   candidates <- c(
-    file.path(project_root, "workspace", "uncertainty", "runs.csv")
+    file.path(project_root, "outputs", "traceability", "suite_runs", "uncertainty_runs.csv")
   )
   hit <- candidates[file.exists(candidates)][1]
   if (is.na(hit)) {
-    stop("No run registry found (checked workspace/uncertainty/runs.csv).", call. = FALSE)
+    stop("No run registry found (checked outputs/traceability/suite_runs/uncertainty_runs.csv).", call. = FALSE)
   }
   hit
 }

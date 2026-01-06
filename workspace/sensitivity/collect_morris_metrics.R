@@ -28,7 +28,7 @@ as_logical_flag <- function(x) {
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
 default_opts <- list(
-  runs_path = file.path(project_root, "workspace", "sensitivity", "runs.csv"),
+  runs_path = file.path(project_root, "outputs", "traceability", "suite_runs", "sensitivity_runs.csv"),
   results_dir = file.path(project_root, "outputs", "sensitivity", "results"),
   help = FALSE
 )
@@ -85,7 +85,7 @@ parse_cli_args <- function(args) {
 print_usage <- function() {
   cat(paste0(
     "Usage: Rscript workspace/sensitivity/collect_morris_metrics.R [options]\n",
-    "  --runs=PATH         runs.csv path (default workspace/sensitivity/runs.csv)\n",
+    "  --runs=PATH         runs.csv path (default outputs/traceability/suite_runs/sensitivity_runs.csv)\n",
     "  --results-dir=PATH  output directory for results (default outputs/sensitivity/results)\n",
     "  --help              Show this message\n"
   ))

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 WORKSPACE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${WORKSPACE_ROOT}/.." && pwd)"
+LOG_ROOT="${PROJECT_ROOT}/outputs/traceability/e2e"
+LOG_DIR="${LOG_ROOT}/logs"
+RUN_LOG="${LOG_ROOT}/run_log.csv"
+FAIL_LOG="${LOG_ROOT}/failures.log"
+mkdir -p "${LOG_DIR}"
 
 usage() {
   cat <<USAGE
@@ -68,11 +73,61 @@ should_skip() {
   [[ -n "${SKIP_LIST}" ]] && [[ ",${SKIP_LIST}," == *",${needle},"* ]]
 }
 
+csv_escape() {
+  local value="${1:-}"
+  value="${value//$'\n'/ }"
+  value="${value//$'\r'/ }"
+  value="${value//\"/\"\"}"
+  printf '"%s"' "${value}"
+}
+
+ensure_run_log() {
+  if [[ ! -f "${RUN_LOG}" ]]; then
+    printf '%s\n' "timestamp,step,status,exit_code,command,log_file" > "${RUN_LOG}"
+  fi
+}
+
+append_run_log() {
+  local ts="$1"
+  local step="$2"
+  local status="$3"
+  local exit_code="$4"
+  local cmd="$5"
+  local log_file="$6"
+  ensure_run_log
+  printf '%s,%s,%s,%s,%s,%s\n' \
+    "$(csv_escape "${ts}")" \
+    "$(csv_escape "${step}")" \
+    "$(csv_escape "${status}")" \
+    "$(csv_escape "${exit_code}")" \
+    "$(csv_escape "${cmd}")" \
+    "$(csv_escape "${log_file}")" >> "${RUN_LOG}"
+}
+
+slugify() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g; s/^_+|_+$//g'
+}
+
+failures=0
 run_step() {
   local label="$1"
   shift
-  echo "== ${label} =="
-  "$@"
+  local ts log_stamp log_file status status_label cmd
+  ts="$(date +"%Y-%m-%dT%H:%M:%S")"
+  log_stamp="$(date +"%Y%m%d_%H%M%S")"
+  log_file="${LOG_DIR}/${log_stamp}_$(slugify "${label}").log"
+  cmd="$*"
+  echo "== ${label} ==" | tee -a "${log_file}"
+  "$@" > >(tee -a "${log_file}") 2> >(tee -a "${log_file}" >&2)
+  status=$?
+  status_label="success"
+  if [[ ${status} -ne 0 ]]; then
+    status_label="error"
+    failures=$((failures + 1))
+    printf '%s | %s | exit=%s | %s | log=%s\n' "${ts}" "${label}" "${status}" "${cmd}" "${log_file}" >> "${FAIL_LOG}"
+  fi
+  append_run_log "${ts}" "${label}" "${status_label}" "${status}" "${cmd}" "${log_file}"
+  return "${status}"
 }
 
 has_glob() {
@@ -162,4 +217,9 @@ if ! should_skip traceability; then
 fi
 
 message="End-to-end run complete."
+if [[ ${failures} -gt 0 ]]; then
+  message="${message} (failures: ${failures}; see ${RUN_LOG})"
+  echo "$message"
+  exit 1
+fi
 echo "$message"

@@ -38,7 +38,7 @@ design_candidates <- c(
   file.path(project_root, "workspace", "sensitivity", "morris_design_points.csv"),
   file.path(project_root, "workspace", "sensitivity", "config", "morris_design_points.csv")
 )
-runs_path <- file.path(project_root, "workspace", "sensitivity", "runs.csv")
+runs_path <- file.path(project_root, "outputs", "traceability", "suite_runs", "sensitivity_runs.csv")
 config_dir <- file.path(project_root, "workspace", "sensitivity", "config", "generated")
 results_dir <- file.path(project_root, "outputs", "sensitivity", "results")
 dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)

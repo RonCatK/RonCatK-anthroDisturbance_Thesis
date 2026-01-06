@@ -134,7 +134,7 @@ run_dataprep <- function(input_root,
     modulePath  = file.path(project_root, "modules"),
     inputPath   = input_root,
     outputPath  = file.path(project_root, "outputs"),
-    cachePath   = file.path(project_root, "data", "cache"),
+    cachePath   = file.path(project_root, "scratch", "cache", "dataprep"),
     scratchPath = file.path(project_root, "scratch")
   )
   dir.create(paths$cachePath, recursive = TRUE, showWarnings = FALSE)
@@ -245,7 +245,12 @@ download_bead_archives <- function(bead_root,
 
   if (!is.null(bead_2020_url) && nzchar(bead_2020_url)) {
     message("Downloading BEAD 2020 archive to ", archive_2020)
-    download_url_file(bead_2020_url, archive_2020, force = TRUE)
+    if (grepl("drive.google.com", bead_2020_url, fixed = TRUE) ||
+      grepl("docs.google.com", bead_2020_url, fixed = TRUE)) {
+      download_drive_file(bead_2020_url, archive_2020, force = TRUE)
+    } else {
+      download_url_file(bead_2020_url, archive_2020, force = TRUE)
+    }
     return(invisible(TRUE))
   }
 

@@ -23,8 +23,8 @@ usage() {
 Usage: $(basename "$0") [--mode=all|failed|missing]
 
   --mode=all      (default) run every system config
-  --mode=failed   rerun configs whose previous row in workspace/system/runs.csv had status != success
-  --mode=missing  run configs that have no entry in workspace/system/runs.csv
+  --mode=failed   rerun configs whose previous row in outputs/traceability/suite_runs/system_runs.csv had status != success
+  --mode=missing  run configs that have no entry in outputs/traceability/suite_runs/system_runs.csv
 EOF
   exit 1
 }
@@ -62,7 +62,8 @@ if [[ ! "${MODE}" =~ ^(all|failed|missing)$ ]]; then
 fi
 
 declare -A config_status_map
-RUNS_CSV="${ROOT}/system/runs.csv"
+PROJECT_ROOT="$(cd "${ROOT}/.." && pwd)"
+RUNS_CSV="${PROJECT_ROOT}/outputs/traceability/suite_runs/system_runs.csv"
 if [[ -f "${RUNS_CSV}" ]]; then
   while IFS=, read -r timestamp suite run_name replicate seed config_file modules data_profile input_root output_dir log_file status error_message; do
     [[ -z "${config_file}" ]] && continue

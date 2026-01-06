@@ -47,7 +47,7 @@ paths <- list(
   modulePath  = file.path(project_root, "modules"),
   inputPath   = file.path(project_root, "data"),
   outputPath  = file.path(project_root, "outputs"),
-  cachePath   = file.path(project_root, "data", "cache"),
+  cachePath   = file.path(project_root, "scratch", "cache", "dataprep"),
   scratchPath = file.path(project_root, "scratch")
 )
 dir.create(paths$cachePath, recursive = TRUE, showWarnings = FALSE)
