@@ -1,0 +1,5 @@
+run_name,scenario_id,cfg,desc,design_sample,n_reps,rng_seed,siteSelectionAsDistributing,totalDisturbanceRate,clusterDistance,useClusterMethod
+ua_sitesel_001,ua_sitesel_001,workspace/uncertainty/config/generated_site_selection/ua_sitesel_001.yaml,UA siteSelection=seismicLines,1,10,,seismicLines,1.5,1000,TRUE
+ua_sitesel_002,ua_sitesel_002,workspace/uncertainty/config/generated_site_selection/ua_sitesel_002.yaml,UA siteSelection=oilGas,2,10,,oilGas,1.5,1000,TRUE
+ua_sitesel_003,ua_sitesel_003,workspace/uncertainty/config/generated_site_selection/ua_sitesel_003.yaml,UA siteSelection=oilGas;cutblocks;mining,3,10,,oilGas;cutblocks;mining,1.5,1000,TRUE
+ua_sitesel_004,ua_sitesel_004,workspace/uncertainty/config/generated_site_selection/ua_sitesel_004.yaml,UA siteSelection=oilGas;cutblocks;mining;seismicLines,4,10,,oilGas;cutblocks;mining;seismicLines,1.5,1000,TRUE

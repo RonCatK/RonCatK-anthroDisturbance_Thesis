@@ -15,6 +15,13 @@ suppressPackageStartupMessages({
 
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
+relative_to_root <- function(path) {
+  if (is.null(path) || !nzchar(path)) return(NA_character_)
+  normalized <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  prefix <- paste0(project_root, "/")
+  if (startsWith(normalized, prefix)) sub(prefix, "", normalized, fixed = TRUE) else normalized
+}
+
 default_opts <- list(
   parameters_file = file.path(project_root, "workspace", "sensitivity", "config", "morris_parameters.yaml"),
   base_config = file.path(project_root, "workspace", "sensitivity", "config", "sa_base.yaml"),
@@ -328,14 +335,14 @@ main <- function() {
     meta_row$grid_levels <- opts$levels
     meta_row$grid_jump <- opts$grid_jump
     meta_row$replicates <- opts$replicates
-    meta_row$config_file <- cfg_path
+    meta_row$config_file <- relative_to_root(cfg_path)
     design_rows[[i]] <- meta_row
 
     run_rows[[i]] <- list(
       run_name = run_name,
       trajectory_id = traj_idx,
       point_index = point_idx,
-      config_file = cfg_path
+      config_file = relative_to_root(cfg_path)
     )
   }
 

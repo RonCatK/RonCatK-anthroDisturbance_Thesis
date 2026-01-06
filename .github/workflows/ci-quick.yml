@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  AGGREGATE_DIR: artifacts/module-reports
+  AGGREGATE_DIR: outputs/traceability/module-reports
 
 jobs:
   collect:

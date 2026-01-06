@@ -1,0 +1,42 @@
+suite: e2e_dummy
+run_name: dummy_rates
+description: Dummy end-to-end run with custom disturbance rates (synthetic inputs)
+config_version: "1"
+modules:
+  - anthroDisturbance_DataPrep
+  - anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2012
+  timeunit: year
+paths:
+  input_root: data/synthetic/rates/synthetic_inputs
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: synthetic_dummy
+disturbance_rate_file: workspace/rates/disturbance_rates/rates_custom.csv
+params:
+  anthroDisturbance_Generator:
+    generatedDisturbanceAsRaster: false
+    useClusterMethod: false
+    refinedStructure: false
+    maskWaterAndMountainsFromLines: false
+    verboseDiagnostics: false
+    disturbFirstYear: false
+    saveInitialDisturbances: false
+    runClusteringInParallel: false
+    growthStepEnlargingPolys: 1
+    disturbanceRateRelatesToBufferedArea: false
+    connectingBlockSize: NULL
+    siteSelectionAsDistributing: "seismicLines"
+    use_wind_data: false
+    altitudeCut: 550
+    distanceNewLinesFactor: 1.5
+    runInterval: 1
+n_reps: 1
+seed_base: 42000
+study_area: data/synthetic/rates/studyArea/syntheticAOI.shp
+raster_to_match: data/synthetic/rates/studyArea/rtm_50m.tif
+input_behaviour:
+  allow_download_if_missing: true

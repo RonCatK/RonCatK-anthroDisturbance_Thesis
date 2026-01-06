@@ -5,28 +5,28 @@
 *.Rproj
 
 # dev stuff
-/scripts/bootstrap.R
-scripts/devcontainer-postcreate.sh
 /.devcontainer/*
 .vscode
 
-# data
-/data/*
-!/data/download_links.csv
-/data/raw
+# data (downloaded/generated)
+/data/raw/
+/data/preprocessed/
+/data/cache/
+/data/tmp/
+/data/synthetic/
 /data/aoi/aoi_smoke_test.*
 
-# scrapch, cache and output paths
-/scratch
-/outputs
-/cache
+# scratch and output paths
+/scratch/*
+!/scratch/.gitkeep
+/outputs/*
+!/outputs/.gitkeep
 .scfm_legacy/
 /scfm_legacy/
-.Rprofile
 
 # emergent from config building and run logging
 /workspace/*/runs.csv
 /workspace/*/results/*
 /workspace/*/figures/*
 /workspace/*/config/generated/*
-artifacts/
+/workspace/*/config/generated_site_selection/*

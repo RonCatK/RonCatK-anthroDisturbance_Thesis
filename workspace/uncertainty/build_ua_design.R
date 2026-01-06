@@ -11,6 +11,13 @@ suppressPackageStartupMessages({
 
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
+relative_to_root <- function(path) {
+  if (is.null(path) || !nzchar(path)) return(NA_character_)
+  normalized <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  prefix <- paste0(project_root, "/")
+  if (startsWith(normalized, prefix)) sub(prefix, "", normalized, fixed = TRUE) else normalized
+}
+
 default_opts <- list(
   parameters_file = file.path(project_root, "workspace", "uncertainty", "config", "ua_parameters.yaml"),
   base_config = file.path(project_root, "workspace", "uncertainty", "config", "ua_base.yaml"),
@@ -215,7 +222,7 @@ main <- function() {
     meta_dt <- data.table(
       run_name = run_name,
       scenario_id = run_name,
-      cfg = cfg_path,
+      cfg = relative_to_root(cfg_path),
       desc = desc,
       design_sample = i,
       n_reps = n_reps,

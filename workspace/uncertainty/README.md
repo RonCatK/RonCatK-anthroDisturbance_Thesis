@@ -1,12 +1,13 @@
 # Uncertainty analysis (UA) suite
 
-This mirrors the legacy `validation/ua` workflow but targets the generic `workspace/runner.R`. UA scenarios are expressed as standalone runner configs and can be run one-by-one or in bulk.
+This mirrors the legacy UA workflow but targets the generic `workspace/runner.R`. UA scenarios are expressed as standalone runner configs and can be run one-by-one or in bulk.
 
 ## Files
 
 - `config/ua_base.yaml` – short-window base UA scenario.
 - `config/ua_runs.csv` – lightweight index of UA configs (columns: `run_name`, `cfg`, `desc`).
-- `run_all.sh` – convenience wrapper to run all UA configs via `runner.R`.
+- `run_generated.sh` – convenience wrapper to run all generated UA configs via `runner.R`.
+- `finalize_ua_metrics.R` – single entrypoint to collect UA metrics and summaries into `outputs/uncertainty/results/`.
 
 ## UA design helper
 
@@ -47,20 +48,26 @@ Run them with:
 bash workspace/uncertainty/run_site_selection.sh
 ```
 
-Collect metrics using the design file:
+## Metrics
+
+Collect all UA metrics (base, random design, and site selection) with a single entry point:
 
 ```bash
-Rscript workspace/uncertainty/collect_ua_metrics.R \
-  --mode design \
-  --run-name ua_sitesel_001,ua_sitesel_002,ua_sitesel_003,ua_sitesel_004 \
-  --design-file workspace/uncertainty/config/ua_site_selection_design_points.csv
+Rscript workspace/uncertainty/finalize_ua_metrics.R \
+  --base-run=ua_base \
+  --random-runs=ua_random_001,ua_random_002,ua_random_003,ua_random_004,ua_random_005,ua_random_006,ua_random_007,ua_random_008 \
+  --sitesel-runs=ua_sitesel_001,ua_sitesel_002,ua_sitesel_003,ua_sitesel_004 \
+  --design-file=workspace/uncertainty/config/ua_design_points.csv \
+  --sitesel-design-file=workspace/uncertainty/config/ua_site_selection_design_points.csv
 ```
+
+`finalize_ua_metrics.R` calls `collect_ua_metrics.R` for each sub-suite and then `summarize_ua_results.R`; outputs land in `outputs/uncertainty/results/`.
 
 ## Running UA scenarios
 
 ```bash
-# run all UA configs defined here
-bash workspace/uncertainty/run_all.sh
+# run all generated UA configs
+bash workspace/uncertainty/run_generated.sh
 
 # or run a single config
 Rscript workspace/runner.R workspace/uncertainty/config/ua_base.yaml

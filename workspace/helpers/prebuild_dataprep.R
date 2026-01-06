@@ -35,6 +35,11 @@ suppressPackageStartupMessages({
   library(googledrive)
 })
 
+resolve_first_existing <- function(paths) {
+  hits <- paths[file.exists(paths)]
+  if (length(hits)) normalizePath(hits[[1]], winslash = "/", mustWork = TRUE) else NA_character_
+}
+
 terra::terraOptions(todisk = TRUE, memfrac = 0.6)
 try(googledrive::drive_deauth(), silent = TRUE)
 
@@ -60,13 +65,31 @@ options(
   reproducible.destinationPath = paths$outputPath
 )
 
+module_data <- file.path(paths$modulePath, "anthroDisturbance_DataPrep", "data")
+disturbance_dt_path <- resolve_first_existing(c(
+  file.path(paths$inputPath, "raw", "disturbanceDT.csv"),
+  file.path(module_data, "disturbanceDT.csv")
+))
+study_area_path <- resolve_first_existing(c(
+  file.path(paths$inputPath, "study_area", "aoi_southwest_NWT.shp"),
+  file.path(module_data, "NT1_BCR6.shp")
+))
+rtm_path <- resolve_first_existing(c(
+  file.path(paths$inputPath, "study_area", "aoi_southwest_NWT_RTM_250m.tif"),
+  file.path(paths$inputPath, "raw", "RTM.tif"),
+  file.path(module_data, "RTM.tif")
+))
+if (is.na(disturbance_dt_path)) stop("disturbanceDT.csv not found under data/raw or module defaults.")
+if (is.na(study_area_path)) stop("Study area shapefile not found under data/study_area or module defaults.")
+if (is.na(rtm_path)) stop("rasterToMatch not found under data/study_area, data/raw, or module defaults.")
+
 times <- list(start = 2011, end = 2051, timeunit = "year")
 modules <- list("anthroDisturbance_DataPrep", "potentialResourcesNT_DataPrep")
 
 objects <- list(
-  disturbanceDT = data.table::fread(file.path(paths$inputPath, "raw", "disturbanceDT.csv")),
-  studyArea     = terra::vect(file.path(paths$inputPath, "study_area", "aoi_southwest_NWT.shp")),
-  rasterToMatch = terra::rast(file.path(paths$inputPath, "raw", "RTM.tif"))
+  disturbanceDT = data.table::fread(disturbance_dt_path),
+  studyArea     = terra::vect(study_area_path),
+  rasterToMatch = terra::rast(rtm_path)
 )
 
 if (any(objects$disturbanceDT$dataType == "mif")) {

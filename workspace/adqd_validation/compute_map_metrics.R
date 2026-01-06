@@ -13,13 +13,14 @@ suppressPackageStartupMessages({
 
 project_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 default_analysis_mode <- "adqd_holdout"
+default_output_root <- file.path(project_root, "outputs", "adqd_validation", "results", default_analysis_mode)
 
 parse_cli_args <- function(args) {
   opts <- list(
     simulation_root = file.path(project_root, "outputs", "adqd_validation", "ADQD_HOLDOUT"),
-    output_root = file.path(project_root, "scratch", "adqd_validation", "metrics", "ADQD_HOLDOUT"),
+    output_root = default_output_root,
     bead_root = file.path(project_root, "data", "raw", "ECCC"),
-    study_area = file.path(project_root, "data", "study_area", "aoi_southwest_NWT.shp"),
+    study_area = file.path(project_root, "data", "study_area", "NWT_boundary.shp"),
     intervals = list(c(2015L, 2020L)),
     replicates = 1:5,
     line_buffer = 30,
@@ -95,9 +96,9 @@ print_usage <- function() {
   cat(paste0(
     "Usage: Rscript workspace/adqd_validation/compute_map_metrics.R [options]\n",
     "  --simulation-root=DIR   Path to AD/QD run outputs (default outputs/adqd_validation/ADQD_HOLDOUT).\n",
-    "  --output-root=DIR       Directory to store metric tables (default scratch/adqd_validation/metrics/ADQD_HOLDOUT).\n",
+    "  --output-root=DIR       Directory to store metric tables (default outputs/adqd_validation/results/<analysis_mode>).\n",
     "  --bead-root=DIR         Folder with BEAD data archives (default data/raw/ECCC).\n",
-    "  --study-area=FILE       Study area polygon used for clipping (default data/study_area/aoi_southwest_NWT.shp).\n",
+    "  --study-area=FILE       Study area polygon used for clipping (default data/study_area/NWT_boundary.shp).\n",
     "  --intervals=a:b,c:d     Comma-separated baseline:comparison year pairs (default 2015:2020).\n",
     "  --replicates=list       Replicate IDs to analyse (default 1:5).\n",
     "  --line-buffer=VALUE     Buffer (m) applied to line features before calculating areas (default 30).\n",
@@ -2093,6 +2094,10 @@ main <- function() {
     print_usage()
     quit(save = "no", status = 0, runLast = FALSE)
   }
+  if (!identical(opts$analysis_mode, default_analysis_mode) &&
+      identical(opts$output_root, default_output_root)) {
+    opts$output_root <- file.path(project_root, "outputs", "adqd_validation", "results", opts$analysis_mode)
+  }
   if (isTRUE(opts$caribou_buffer)) {
     opts$line_buffer <- 500
     opts$polygon_buffer <- max(opts$polygon_buffer, 500)
@@ -2128,4 +2133,6 @@ main <- function() {
   }
 }
 
-main()
+if (!isFALSE(getOption("adqd_compute_map_metrics.run_main", TRUE))) {
+  main()
+}

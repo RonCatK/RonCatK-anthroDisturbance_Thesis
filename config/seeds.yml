@@ -1,5 +1,0 @@
-# Seeds for reproducible runs.
-seeds:
-  default: 1234
-  generator: 5678
-  dataprep: 91011

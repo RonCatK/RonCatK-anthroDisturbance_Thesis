@@ -213,7 +213,7 @@ main <- function() {
   run_label <- make_run_label(run_names)
   message(sprintf("Analysing UA design summaries for suite=%s, runs=[%s], label=%s.", suite, paste(run_names, collapse = ","), run_label))
 
-  results_dir <- file.path(project_root, "workspace", "uncertainty", "results")
+  results_dir <- file.path(project_root, "outputs", "uncertainty", "results")
   design_csv <- file.path(results_dir, sprintf("ua_design_summary_%s.csv", run_label))
   global_csv <- file.path(results_dir, sprintf("ua_global_summary_%s.csv", run_label))
 

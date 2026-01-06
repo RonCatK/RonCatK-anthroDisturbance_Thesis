@@ -3,7 +3,7 @@
 # Generic SpaDES runner for thesis workflows.
 # Usage: Rscript workspace/runner.R /path/to/config.yaml
 # Config format (YAML/JSON/R list):
-#   suite: system|verification|sensitivity|uncertainty|adqd_validation
+#   suite: system|verification|sensitivity|uncertainty|adqd_validation|rates|e2e_dummy
 #   run_name: short identifier for the run
 #   description: optional text
 #   config_version: optional, defaults to "1"
@@ -233,7 +233,7 @@ validate_config <- function(cfg) {
   if (!is.list(cfg)) stop("Config must be a list-like object.", call. = FALSE)
   assert_scalar_character(cfg$suite, "suite")
   suite <- tolower(cfg$suite)
-  allowed_suites <- c("system", "verification", "sensitivity", "uncertainty", "adqd_validation", "rates")
+  allowed_suites <- c("system", "verification", "sensitivity", "uncertainty", "adqd_validation", "rates", "e2e_dummy")
   if (!suite %in% allowed_suites) stop("suite must be one of: ", paste(allowed_suites, collapse = ", "), call. = FALSE)
 
   assert_scalar_character(cfg$run_name, "run_name")
@@ -671,6 +671,7 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
     spades.outputPath = output_dir,
     spades.scratchPath = scratch_dir,
     spades.seed = seed,
+    spades.useRequire = if (identical(cfg$suite, "e2e_dummy")) FALSE else getOption("spades.useRequire", TRUE),
     spades.allowInitDuringSimInit = TRUE,
     spades.recoveryMode = 0,
     spades.DTthreads = runner_core_budget$per_job,

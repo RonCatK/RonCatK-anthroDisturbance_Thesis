@@ -1,0 +1,131 @@
+name: Traceability Matrix
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - docs/traceability/traceability_matrix.md
+      - docs/traceability/traceability_matrix.csv
+  pull_request:
+  workflow_run:
+    workflows: ["Module CI Aggregator"]
+    types: [completed]
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+env:
+  R_PROFILE_USER: /dev/null
+  R_PROFILE: /dev/null
+  R_ENVIRON_USER: /dev/null
+  R_ENVIRON: /dev/null
+
+jobs:
+  traceability:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Prepare R library path
+        run: |
+          echo "R_LIBS_USER=$RUNNER_TEMP/Rlibs" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/Rlibs"
+
+      - name: Setup R toolchain
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install system dependencies (sf/terra)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgdal-dev \
+            libproj-dev \
+            gdal-bin \
+            libgeos-dev \
+            libudunits2-dev
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            any::covr
+            any::testthat
+            any::withr
+            any::terra
+            any::data.table
+            any::qs
+            any::sf
+            any::reproducible
+            any::raster
+            any::tictoc
+            any::mockery
+            any::Require
+            any::fasterize
+            any::xml2
+            any::digest
+            any::DT
+            any::htmltools
+            any::htmlwidgets
+            any::crayon
+            any::msm
+            any::doParallel
+            any::doSNOW
+            any::foreach
+            any::dplyr
+            any::sp
+            any::stringi
+            any::zip
+            any::truncnorm
+            any::yaml
+
+      - name: Run module unit tests (best-effort)
+        id: module_tests
+        run: Rscript workspace/helpers/run_all_module_tests.R
+        continue-on-error: true
+
+      - name: Validate runner configs (best-effort)
+        id: config_validation
+        run: Rscript workspace/helpers/validate_runner_configs.R
+        continue-on-error: true
+
+      - name: Generate traceability matrix
+        if: always()
+        run: Rscript workspace/helpers/generate_traceability_matrix.R
+
+      - name: Upload traceability bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traceability-matrix
+          path: |
+            docs/traceability/traceability_matrix.csv
+            docs/traceability/traceability_matrix.md
+            docs/traceability/evidence
+            outputs/traceability/system_tests
+            outputs/traceability/unit_tests
+          if-no-files-found: warn
+
+      - name: Commit updated matrix (main branch only)
+        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add docs/traceability/traceability_matrix.csv docs/traceability/traceability_matrix.md
+          git commit -m "CI: update traceability matrix [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Mark workflow failed if checks failed
+        if: always()
+        run: |
+          if [ "${{ steps.module_tests.outcome }}" = "failure" ] || [ "${{ steps.config_validation.outcome }}" = "failure" ]; then
+            echo "One or more validation steps failed."
+            exit 1
+          fi

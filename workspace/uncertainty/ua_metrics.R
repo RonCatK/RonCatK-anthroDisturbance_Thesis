@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # UA metrics collector (workspace version)
 # Reads workspace/uncertainty runs registry, computes per-replicate disturbance metrics,
-# summarises across replicates, and writes run-level outputs under workspace/uncertainty/results.
+# summarises across replicates, and writes run-level outputs under outputs/uncertainty/results.
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -34,7 +34,7 @@ option_list <- list(
   optparse::make_option(
     "--results-root",
     type = "character",
-    default = file.path(project_root, "workspace", "uncertainty", "results"),
+    default = file.path(project_root, "outputs", "uncertainty", "results"),
     help = "Output folder for per-run metric tables."
   ),
   optparse::make_option(

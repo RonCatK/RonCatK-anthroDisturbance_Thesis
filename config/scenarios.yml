@@ -1,8 +1,0 @@
-# Scenario definitions for regions, years, and land cover classes.
-scenarios:
-  - name: placeholder
-    region: TODO
-    years:
-      - 2020
-    classes:
-      - example_class

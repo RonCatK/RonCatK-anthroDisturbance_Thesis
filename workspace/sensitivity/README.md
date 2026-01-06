@@ -30,28 +30,22 @@ This folder mirrors the validation SA workflow but targets the new generic `work
 4. **Analyse**  
    The design metadata (`morris_design_points.csv`) aligns trajectory/point indices with the parameter values injected into each run. Feed outputs + design to your UA/SA metric scripts as needed.
 
-   For the thesis-facing Morris results (including reruns), use the finalize script which:
-   - recollects run metrics from `runs.csv`
-   - rebuilds the executed design from YAML configs
-   - computes step QC + Morris EEs only for `n_changed == 1`
-   - writes `*_FIXED.csv` outputs used by downstream reporting
+   Use the consolidated finalize helper to collect metrics, compute Morris effects, and write a compact QC summary:
 
    ```
-   Rscript validation/sensitivity/finalize_morris_salvage.R \
+   Rscript workspace/sensitivity/finalize_morris_metrics.R \
      --runs workspace/sensitivity/runs.csv \
-     --outputs_dir outputs \
      --results_dir outputs/sensitivity/results
    ```
 
    Key outputs:
+   - `outputs/sensitivity/results/morris_run_metrics_long.csv`
+   - `outputs/sensitivity/results/morris_design_metrics_long.csv`
+   - `outputs/sensitivity/results/morris_elementary_effects_long.csv`
+   - `outputs/sensitivity/results/morris_effects_long.csv`
    - `outputs/sensitivity/results/morris_step_qc.csv`
-   - `outputs/sensitivity/results/morris_design_executed.csv`
-   - `outputs/sensitivity/results/morris_elementary_effects_long_FIXED.csv`
-   - `outputs/sensitivity/results/morris_effects_long_FIXED.csv`
    - `outputs/sensitivity/results/morris_qc_summary.csv` + `outputs/sensitivity/results/morris_qc_summary.md`
-   - `outputs/sensitivity/figures/morris_mu_star_sigma_by_metric_year.png` (and a version excluding `useClusterMethod`)
-   - `outputs/sensitivity/results/useClusterMethod_scenario_comparison.csv`
-   - `outputs/sensitivity/results/useClusterMethod_regression_summary.csv`
+   - `outputs/sensitivity/figures/morris_<metric_id>_<year>.png`
 
 ## Metric interpretation note (seismic lines)
 

@@ -623,7 +623,7 @@ otherCols <- setdiff(names(joined), priorityCols)
 setcolorder(joined, c(priorityCols, otherCols))
 
 timestamp <- format(Sys.time(), "%y%m%d_%H%M%S")
-resultsDir <- file.path(projectRoot, "workspace", "rates", "results")
+resultsDir <- file.path(projectRoot, "outputs", "rates", "results")
 dir.create(resultsDir, recursive = TRUE, showWarnings = FALSE)
 config_base <- tools::file_path_sans_ext(basename(configPath))
 results_filename <- sprintf("verification_%s.csv", config_base)

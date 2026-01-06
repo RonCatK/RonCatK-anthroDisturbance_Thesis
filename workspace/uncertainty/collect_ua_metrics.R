@@ -43,7 +43,7 @@ option_list <- list(
   optparse::make_option(
     c("--design-file"),
     type = "character",
-    default = file.path("workspace", "uncertainty", "ua_design_points.csv"),
+    default = file.path("workspace", "uncertainty", "config", "ua_design_points.csv"),
     help = "Design CSV (required for design mode).",
     metavar = "FILE"
   ),
@@ -114,7 +114,7 @@ normalize_path <- function(pathValue) {
 }
 
 ensure_qa_dir <- function() {
-  qa_dir <- file.path(project_root, "workspace", "uncertainty", "results", "qa")
+  qa_dir <- file.path(project_root, "outputs", "uncertainty", "results", "qa")
   dir.create(qa_dir, recursive = TRUE, showWarnings = FALSE)
   qa_dir
 }
@@ -629,7 +629,7 @@ main <- function() {
     )
   }
 
-  results_dir <- file.path(project_root, "workspace", "uncertainty", "results")
+  results_dir <- file.path(project_root, "outputs", "uncertainty", "results")
   dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
   run_out_csv <- file.path(results_dir, sprintf("ua_run_metrics_%s.csv", run_label))
   readr::write_csv(run_metrics, run_out_csv)
