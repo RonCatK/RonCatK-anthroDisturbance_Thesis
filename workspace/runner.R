@@ -338,6 +338,8 @@ validate_config <- function(cfg) {
     params = cfg$params %||% list(),
     metadata = cfg$metadata %||% list(),
     n_reps = n_reps,
+    n_par_reps = max(1L, as.integer(cfg$n_par_reps %||% 1L), na.rm = TRUE),
+    rep_start = max(1L, as.integer(cfg$rep_start %||% 1L), na.rm = TRUE),
     seed_base = seed_base,
     seeds = seeds,
     input_behaviour = input_behaviour,
@@ -648,7 +650,7 @@ append_run_log <- function(row, suite, runs_csv_path = NULL) {
   )
 }
 
-run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
+run_replicate <- function(cfg, rep_id, seed, disturbance_dt, deferred_log = FALSE) {
   rep_tag <- sprintf("rep_%03d", rep_id)
   output_dir <- ensure_dir(file.path(cfg$paths$output_root, cfg$suite, cfg$run_name, rep_tag))
   scratch_dir <- ensure_dir(file.path(cfg$paths$scratch_root, cfg$suite, cfg$run_name, rep_tag))
@@ -973,24 +975,22 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
 
   end_time <- timestamp_now()
 
-  append_run_log(
-    row = list(
-      timestamp = end_time,
-      suite = cfg$suite,
-      run_name = cfg$run_name,
-      replicate = rep_id,
-      seed = seed,
-      config_file = relative_to_root(cfg$config_file),
-      modules = paste(cfg$modules, collapse = ","),
-      data_profile = cfg$data_profile,
-      input_root = relative_to_root(cfg$paths$input_root),
-      output_dir = relative_to_root(output_dir),
-      log_file = relative_to_root(log_file),
-      status = status,
-      error_message = err_msg %||% ""
-    ),
-    suite = cfg$suite
+  log_row <- list(
+    timestamp = end_time,
+    suite = cfg$suite,
+    run_name = cfg$run_name,
+    replicate = rep_id,
+    seed = seed,
+    config_file = relative_to_root(cfg$config_file),
+    modules = paste(cfg$modules, collapse = ","),
+    data_profile = cfg$data_profile,
+    input_root = relative_to_root(cfg$paths$input_root),
+    output_dir = relative_to_root(output_dir),
+    log_file = relative_to_root(log_file),
+    status = status,
+    error_message = err_msg %||% ""
   )
+  if (!deferred_log) append_run_log(row = log_row, suite = cfg$suite)
 
   list(
     status = status,
@@ -998,7 +998,8 @@ run_replicate <- function(cfg, rep_id, seed, disturbance_dt) {
     output_dir = output_dir,
     log_file = log_file,
     sim = sim,
-    result = res
+    result = res,
+    log_row = log_row
   )
 }
 
@@ -1088,14 +1089,50 @@ tryCatch({
   last_successful_sim <- NULL
   last_successful_rep <- NULL
 
-  for (rep_id in seq_len(cfg$n_reps)) {
-    seed <- seeds[[rep_id]]
-    res <- run_replicate(cfg, rep_id, seed, disturbance_dt)
-    if (!identical(res$status, "success")) overall_status <- 1L
-    run_rows[[length(run_rows) + 1]] <- res
-    if (identical(res$status, "success") && !is.null(res$sim)) {
-      last_successful_sim <- res$sim
-      last_successful_rep <- rep_id
+  n_par <- cfg$n_par_reps
+  rep_offset <- cfg$rep_start - 1L
+
+  if (n_par > 1L) {
+    message(sprintf(
+      "Parallel replication: %d reps, %d workers, rep_start=%d.",
+      cfg$n_reps, n_par, cfg$rep_start
+    ))
+    par_results <- parallel::mclapply(
+      seq_len(cfg$n_reps),
+      function(local_id) {
+        run_replicate(cfg, local_id + rep_offset, seeds[[local_id]], disturbance_dt,
+                      deferred_log = TRUE)
+      },
+      mc.cores = n_par,
+      mc.preschedule = FALSE
+    )
+    for (res in par_results) {
+      if (is.null(res) || inherits(res, c("try-error", "error"))) {
+        overall_status <- 1L
+        next
+      }
+      run_rows[[length(run_rows) + 1]] <- res
+      if (!is.null(res$log_row)) append_run_log(row = res$log_row, suite = cfg$suite)
+      if (!identical(res$status, "success")) overall_status <- 1L
+      if (identical(res$status, "success") && !is.null(res$sim)) {
+        abs_id <- res$log_row$replicate %||% 0L
+        if (is.null(last_successful_rep) || abs_id > last_successful_rep) {
+          last_successful_sim <- res$sim
+          last_successful_rep <- abs_id
+        }
+      }
+    }
+  } else {
+    for (rep_id in seq_len(cfg$n_reps)) {
+      abs_id <- rep_id + rep_offset
+      seed <- seeds[[rep_id]]
+      res <- run_replicate(cfg, abs_id, seed, disturbance_dt)
+      if (!identical(res$status, "success")) overall_status <- 1L
+      run_rows[[length(run_rows) + 1]] <- res
+      if (identical(res$status, "success") && !is.null(res$sim)) {
+        last_successful_sim <- res$sim
+        last_successful_rep <- abs_id
+      }
     }
   }
 

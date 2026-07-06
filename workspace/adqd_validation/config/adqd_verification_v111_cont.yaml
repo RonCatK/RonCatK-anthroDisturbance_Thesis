@@ -1,0 +1,66 @@
+suite: adqd_validation
+run_name: ADQD_VERIFICATION_V111
+description: "AD/QD verification (2010-2015) — v1.1.1 CONTINUATION reps 4-20 (n_par_reps=4, rep_start=4, seed_base=12348). Runner reps 1-3 were completed sequentially."
+config_version: "1"
+modules:
+  - anthroDisturbance_DataPrep
+  - potentialResourcesNT_DataPrep
+  - anthroDisturbance_Generator
+times:
+  start: 2010
+  end: 2015
+  timeunit: year
+paths:
+  input_root: data/preprocessed/comparison/BEAD2010
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: BEAD comparison
+metadata:
+  baseline_mode: baseline2010
+  code_version: v1.1.1
+  fix_branch: fix/seismicLines-buffered-area
+  fix_commit: 1c6ba3c
+params:
+  potentialResourcesNT_DataPrep:
+    allowPre2011: true
+  anthroDisturbance_Generator:
+    runInterval: 5
+    diffYears: "2010_2015"
+    totalDisturbanceRate:
+    saveInitialDisturbances: false
+    saveCurrentDisturbances: true
+    generatedDisturbanceAsRaster: false
+    disturbanceRateRelatesToBufferedArea: false
+    growthStepEnlargingPolys: 1
+    growthStepEnlargingLines: #1
+    siteSelectionAsDistributing: seismicLines
+    connectingBlockSize: 500
+    seismicLineGrids: NULL
+    useClusterMethod: true
+    runClusteringInParallel: false
+    refinedStructure: true
+    clusterDistance: 1000
+    distanceNewLinesFactor: 1.5
+    useRoadsPackage: false
+    maskWaterAndMountainsFromLines: true
+    use_wind_data: false
+    altitudeCut: 550
+    checkDisturbancesForBuffer: true
+    disturbFirstYear: false
+    .runName: ADQD_VERIFICATION_V111
+    .seed:
+      anthroDisturbance_Generator:
+        calculatingSize: 41
+        calculatingRate: 42
+        generatingDisturbances: 43
+        updatingDisturbanceList: 44
+n_reps: 17
+n_par_reps: 4
+rep_start: 4
+seed_base: 12348
+study_area: data/study_area/NWT_boundary.shp
+raster_to_match: data/study_area/NWT_RTM_250m.tif
+geodata_path: data/raw
+input_behaviour:
+  allow_download_if_missing: false
