@@ -1,0 +1,46 @@
+suite: sensitivity
+run_name: sa_morris_t05_p05
+description: Morris trajectory 5 point 5
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: preprocessed
+params:
+  anthroDisturbance_Generator:
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: yes
+    refinedStructure: yes
+    maskWaterAndMountainsFromLines: yes
+    verboseDiagnostics: no
+    disturbFirstYear: no
+    saveInitialDisturbances: no
+    runClusteringInParallel: no
+    growthStepGenerating: 0.01
+    disturbanceRateRelatesToBufferedArea: yes
+    use_wind_data: no
+    seismicLineGrids: 500
+    altitudeCut: 550
+    clusterDistance: 800.0
+    distanceNewLinesFactor: 1.4
+    totalDisturbanceRate: 0.5
+    siteSelectionAsDistributing: oilGas;cutblocks
+n_reps: 4
+seed_base: 12461
+input_behaviour:
+  allow_download_if_missing: no
+seeds:
+- 12461
+- 12462
+- 12463
+- 12464

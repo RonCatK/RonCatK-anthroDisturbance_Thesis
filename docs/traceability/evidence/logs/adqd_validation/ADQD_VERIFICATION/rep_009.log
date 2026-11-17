@@ -1,0 +1,252 @@
+[rep_001] Options: reproducible.destinationPath=<REPO>/data/preprocessed/comparison/BEAD2010; spades.inputPath=<REPO>/data/preprocessed/comparison/BEAD2010; spades.outputPath=<REPO>/outputs/adqd_validation/ADQD_VERIFICATION/rep_001
+[rep_001] geodata cache already present: <REPO>/data/preprocessed/comparison/BEAD2010/elevation
+[rep_001] geodata cache already present: <REPO>/data/preprocessed/comparison/BEAD2010/landuse
+[rep_001] Modules being run: anthroDisturbance_DataPrep,potentialResourcesNT_DataPrep,anthroDisturbance_Generator
+[rep_001] DisturbanceRate not supplied in config; relying on module defaults (.inputObjects).
+[rep_001] ADQD suite: disturbanceInterval forced to 1 year for ECCC-derived runs.
+[rep_001] use_wind_data is FALSE; removed 2 wind-related entries from disturbanceParameters
+[rep_001] Objects injected: disturbanceDT,disturbanceParameters,studyArea,rasterToMatch; disturbanceDT rows: 22
+Setting:
+  options(
+    reproducible.cachePath = '<REPO>/cache/workspace'
+    spades.inputPath = '<REPO>/data/preprocessed/comparison/BEAD2010'
+    spades.outputPath = '<REPO>/outputs/adqd_validation/ADQD_VERIFICATION/rep_001'
+    spades.modulePath = '<REPO>/modules'
+    spades.scratchPath = '<REPO>/scratch/adqd_validation/ADQD_VERIFICATION/rep_001'
+  )
+Paths set to:
+  options(
+    rasterTmpDir = '<REPO>/scratch/adqd_validation/ADQD_VERIFICATION/rep_001/raster'
+    reproducible.cachePath = '<REPO>/cache/workspace'
+    spades.inputPath = '<REPO>/data/preprocessed/comparison/BEAD2010'
+    spades.outputPath = '<REPO>/outputs/adqd_validation/ADQD_VERIFICATION/rep_001'
+    spades.modulePath = '<REPO>/modules'
+    spades.scratchPath = '<REPO>/scratch/adqd_validation/ADQD_VERIFICATION/rep_001'
+  )
+  terra::terraOptions(tempdir = '<REPO>/scratch/adqd_validation/ADQD_VERIFICATION/rep_001/terra'
+No packages to install/update
+Loading required package: crayon
+Loading required package: ggplot2
+
+Attaching package: ‘ggplot2’
+
+The following object is masked from ‘package:crayon’:
+
+    %+%
+
+Loading required package: R.utils
+Loading required package: R.oo
+Loading required package: R.methodsS3
+R.methodsS3 v1.8.2 (2022-06-13 22:00:14 UTC) successfully loaded. See ?R.methodsS3 for help.
+R.oo v1.27.1 (2025-05-02 21:00:05 UTC) successfully loaded. See ?R.oo for help.
+
+Attaching package: ‘R.oo’
+
+The following object is masked from ‘package:R.methodsS3’:
+
+    throw
+
+The following object is masked from ‘package:SpaDES.core’:
+
+    clearCache
+
+The following object is masked from ‘package:reproducible’:
+
+    clearCache
+
+The following objects are masked from ‘package:methods’:
+
+    getClasses, getMethods
+
+The following objects are masked from ‘package:base’:
+
+    attach, detach, load, save
+
+R.utils v2.13.0 (2025-02-24 21:20:02 UTC) successfully loaded. See ?R.utils for help.
+
+Attaching package: ‘R.utils’
+
+The following object is masked from ‘package:crayon’:
+
+    reset
+
+The following object is masked from ‘package:SpaDES.tools’:
+
+    wrap
+
+The following objects are masked from ‘package:reproducible’:
+
+    copyFile, downloadFile
+
+The following object is masked from ‘package:utils’:
+
+    timestamp
+
+The following objects are masked from ‘package:base’:
+
+    cat, commandArgs, getOption, isOpen, nullfile, parse, use, warnings
+
+Loading required package: stringi
+Loading required package: tictoc
+
+Attaching package: ‘tictoc’
+
+The following object is masked from ‘package:data.table’:
+
+    shift
+
+Loading required package: RCurl
+
+Attaching package: ‘RCurl’
+
+The following objects are masked from ‘package:tictoc’:
+
+    pop, push
+
+The following object is masked from ‘package:R.utils’:
+
+    reset
+
+The following object is masked from ‘package:R.oo’:
+
+    clone
+
+The following object is masked from ‘package:crayon’:
+
+    reset
+
+Loading required package: digest
+Loading required package: doParallel
+Loading required package: foreach
+
+Attaching package: ‘foreach’
+
+The following object is masked from ‘package:SpaDES.core’:
+
+    times
+
+Loading required package: iterators
+Loading required package: parallel
+Loading required package: fasterize
+
+Attaching package: ‘fasterize’
+
+The following object is masked from ‘package:graphics’:
+
+    plot
+
+The following object is masked from ‘package:base’:
+
+    plot
+
+Loading required package: raster
+Loading required package: sp
+
+Attaching package: ‘sp’
+
+The following object is masked from ‘package:quickPlot’:
+
+    coordinates
+
+
+Attaching package: ‘raster’
+
+The following object is masked from ‘package:quickPlot’:
+
+    extent
+
+Loading required package: terra
+terra 1.8.80
+WARNING: different compile-time and run-time versions of GEOS
+Compiled with:3.13.1-CAPI-1.19.2
+ Running with:3.14.1-CAPI-1.20.5
+
+You should reinstall package 'terra'
+
+
+Attaching package: ‘terra’
+
+The following objects are masked from ‘package:tictoc’:
+
+    shift, size
+
+The following objects are masked from ‘package:R.utils’:
+
+    draw, extract, resample, unwrap, wrap
+
+The following objects are masked from ‘package:R.oo’:
+
+    extend, trim
+
+The following object is masked from ‘package:SpaDES.tools’:
+
+    wrap
+
+The following object is masked from ‘package:SpaDES.core’:
+
+    time<-
+
+The following object is masked from ‘package:data.table’:
+
+    shift
+
+Loading required package: geodata
+Loading required package: googledrive
+Loading required package: msm
+Loading required package: roads
+Loading required package: sf
+Linking to GEOS 3.14.1, GDAL 3.12.0, PROJ 9.7.0; sf_use_s2() is TRUE
+WARNING: different compile-time and runtime versions for GEOS found:
+Linked against: 3.14.1-CAPI-1.20.5 compiled against: 3.13.1-CAPI-1.19.2
+It is probably a good idea to reinstall sf (and maybe lwgeom too)
+Loading required package: truncnorm
+Dez25 20:41:29 simInit Using setDTthreads(8). To change: 'options(spades.DTthreads = X)'.
+      dataName             dataClass disturbanceType disturbanceRate
+        <char>                <char>          <char>           <num>
+1:      oilGas     potentialPipeline      Connecting              NA
+2:       roads        potentialRoads      Connecting              NA
+3:       roads        potentialRoads      Connecting              NA
+4:       roads        potentialRoads      Connecting              NA
+5: settlements  potentialSettlements       Enlarging    2.674281e-04
+6:      oilGas       potentialOilGas      Generating    8.276960e-05
+7:      oilGas potentialSeismicLines      Generating    2.654878e-02
+8:      mining       potentialMining      Generating    9.658164e-05
+9:    forestry    potentialCutblocks      Generating    5.830495e-04
+                               disturbanceSize disturbanceOrigin disturbanceEnd
+                                        <char>            <char>         <char>
+1:                                        <NA>            oilGas       pipeline
+2:                                        <NA>         cutblocks          roads
+3:                                        <NA>            oilGas          roads
+4:                                        <NA>            mining          roads
+5:                                        <NA>       settlements               
+6: msm::rtnorm(1, 8074.11, 3638.32, lower = 0)            oilGas               
+7: msm::rtnorm(1, 2077.88, 2436.35, lower = 0)      seismicLines               
+8:   msm::rtnorm(1, 211405, 564424, lower = 0)            mining               
+9:   msm::rtnorm(1, 273524, 314863, lower = 0)         cutblocks               
+   disturbanceInterval resolutionVector
+                 <int>            <int>
+1:                   1               15
+2:                   1               15
+3:                   1               15
+4:                   1               15
+5:                   1               15
+6:                   1               15
+7:                   1               15
+8:                   1               15
+9:                   1               15
+Total elapsed time for calculating disturbance percentage: : 0.034 sec elapsed
+Difference between expected and achieved change for settlements -- settlements: 0.39  % (ideal value = 0).
+Disturbance achieved: 55.408 km2 -- Disturbance expected: 55.193 km2Difference between expected and achieved change for oilGas -- oilGas: 0.02  % (ideal value = 0).
+Disturbance achieved: 0.474 km2 -- Disturbance expected: 0.474 km2Difference between expected and achieved change for oilGas -- seismicLines: 673.01  % (ideal value = 0).
+Disturbance achieved: 1174.803 km2 -- Disturbance expected: 151.978 km2Difference between expected and achieved change for mining -- mining: 0  % (ideal value = 0).
+Disturbance achieved: 0.553 km2 -- Disturbance expected: 0.553 km2Difference between expected and achieved change for forestry -- cutblocks: 0.25  % (ideal value = 0).
+Disturbance achieved: 3.346 km2 -- Disturbance expected: 3.338 km2[1] "Connected Index 1"
+[1] "Connected Index 2"
+[1] "Connected Index 3"
+[1] "Connected Index 4"
+Elapsed time for merging oilGas (oilGas): 0.012 sec elapsed
+Elapsed time for merging seismicLines (oilGas): 0.04 sec elapsed
+Elapsed time for merging pipeline (oilGas): 0.002 sec elapsed
+Elapsed time for merging roads (roads): 0.008 sec elapsed
+Elapsed time for merging cutblocks (forestry): 0.009 sec elapsed
+Elapsed time for merging mining (mining): 0.007 sec elapsed

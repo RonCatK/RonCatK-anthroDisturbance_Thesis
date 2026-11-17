@@ -1,0 +1,42 @@
+suite: system
+run_name: system_extreme_cluster_unstable
+description: Highly clustered, buffered vector run with extreme rates, masking and large connector blocks.
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: raw
+params:
+  anthroDisturbance_Generator:
+    totalDisturbanceRate: 5.0
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: yes
+    refinedStructure: yes
+    maskWaterAndMountainsFromLines: yes
+    connectingBlockSize: 500
+    verboseDiagnostics: yes
+    disturbFirstYear: yes
+    saveInitialDisturbances: yes
+    runClusteringInParallel: yes
+    growthStepEnlargingPolys: 8
+    growthStepEnlargingLines: 15
+    disturbanceRateRelatesToBufferedArea: yes
+    use_wind_data: no
+    siteSelectionAsDistributing: oilGas;cutblocks;mining;seismicLines
+    clusterDistance: 2000
+    distanceNewLinesFactor: 3.0
+n_reps: 1
+seed_base: 52
+input_behaviour:
+  allow_download_if_missing: no
+

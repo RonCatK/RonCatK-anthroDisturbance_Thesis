@@ -1,0 +1,42 @@
+suite: uncertainty
+run_name: ua_random_001
+description: UA short-window base scenario
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: raw
+params:
+  anthroDisturbance_Generator:
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: yes
+    refinedStructure: yes
+    maskWaterAndMountainsFromLines: yes
+    verboseDiagnostics: yes
+    disturbFirstYear: no
+    saveInitialDisturbances: yes
+    runClusteringInParallel: no
+    growthStepEnlargingPolys: 5
+    disturbanceRateRelatesToBufferedArea: yes
+    seismicRateMultiplier: 0.05
+    connectingBlockSize: ~
+    siteSelectionAsDistributing: seismicLines
+    use_wind_data: no
+    altitudeCut: 550
+    clusterDistance: 1813.6597896
+    distanceNewLinesFactor: 1.5
+    totalDisturbanceRate: 1.897627
+n_reps: 4
+seed_base: 42000
+input_behaviour:
+  allow_download_if_missing: no

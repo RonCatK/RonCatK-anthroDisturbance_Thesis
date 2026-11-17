@@ -1,0 +1,12 @@
+anthroDisturbance_Generator:
+  probabilityDisturbance:
+    seismicLines:
+      Potential: 1
+      probPoly: 1.0
+    cutblocks:
+      Potential: 1
+      probPoly: 1.0
+    oilGas:
+      Potential: 1
+      probPoly: 1.0
+

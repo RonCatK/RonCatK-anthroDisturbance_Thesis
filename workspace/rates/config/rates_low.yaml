@@ -1,0 +1,48 @@
+suite: rates
+run_name: rates_low
+description: Vector pipeline, synthetic proportions
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2021
+  timeunit: year
+paths:
+  input_root: data/synthetic/rates/synthetic_inputs
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: synthetic_rates
+params:
+  anthroDisturbance_Generator:
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: yes
+    refinedStructure: yes
+    maskWaterAndMountainsFromLines: no
+    verboseDiagnostics: yes
+    disturbFirstYear: no
+    saveInitialDisturbances: no
+    runClusteringInParallel: no
+    growthStepEnlargingPolys: 5
+    #growthStepEnlargingLines: 1  # commented out to get default estimation and faster runs
+    disturbanceRateRelatesToBufferedArea: no
+    connectingBlockSize: NULL
+    siteSelectionAsDistributing: "seismicLines"
+    use_wind_data: yes
+    #seismicLineGrids:  # commented out to get default estimation when useClusterMethod = FALSE
+    altitudeCut: 550
+    clusterDistance: 1000
+    distanceNewLinesFactor: 1.5
+    runInterval: 2
+n_reps: 1
+seed_base: 42000
+study_area: data/synthetic/rates/studyArea/syntheticAOI.shp
+raster_to_match: data/synthetic/rates/studyArea/rtm_50m.tif
+disturbance_rate_file: workspace/rates/disturbance_rates/rates_low.csv
+input_behaviour:
+  allow_download_if_missing: no
+metadata:
+  scenario_id: rate_vector_baseline
+  mode: vector

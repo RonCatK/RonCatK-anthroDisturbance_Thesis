@@ -1,0 +1,46 @@
+suite: sensitivity
+run_name: sa_morris_t08_p04
+description: Morris trajectory 8 point 4
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: preprocessed
+params:
+  anthroDisturbance_Generator:
+    generatedDisturbanceAsRaster: no
+    useClusterMethod: yes
+    refinedStructure: yes
+    maskWaterAndMountainsFromLines: yes
+    verboseDiagnostics: no
+    disturbFirstYear: no
+    saveInitialDisturbances: no
+    runClusteringInParallel: no
+    growthStepGenerating: 0.01
+    disturbanceRateRelatesToBufferedArea: yes
+    use_wind_data: no
+    seismicLineGrids: 500
+    altitudeCut: 550
+    clusterDistance: 800.0
+    distanceNewLinesFactor: 1.4
+    totalDisturbanceRate: 1.0
+    siteSelectionAsDistributing: oilGas
+n_reps: 4
+seed_base: 12529
+input_behaviour:
+  allow_download_if_missing: no
+seeds:
+- 12529
+- 12530
+- 12531
+- 12532

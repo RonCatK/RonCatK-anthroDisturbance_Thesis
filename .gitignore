@@ -1,0 +1,32 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# dev stuff
+/.devcontainer/*
+.vscode
+
+# data (downloaded/generated)
+/data/raw/
+/data/preprocessed/
+/data/cache/
+/data/tmp/
+/data/synthetic/
+/data/aoi/aoi_smoke_test.*
+
+# scratch and output paths
+/scratch/*
+!/scratch/.gitkeep
+/outputs/*
+!/outputs/.gitkeep
+.scfm_legacy/
+/scfm_legacy/
+
+# emergent from config building and run logging
+/workspace/*/runs.csv
+/workspace/*/results/*
+/workspace/*/figures/*
+/workspace/*/config/generated/*
+/workspace/*/config/generated_site_selection/*

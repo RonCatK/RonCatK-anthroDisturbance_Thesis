@@ -1,0 +1,18 @@
+# Parameter definitions for workspace/uncertainty build_ua_design.R
+# Continuous parameters specify min/max bounds; discrete parameters list values.
+
+parameters:
+  - name: totalDisturbanceRate
+    column: totalDisturbanceRate
+    type: continuous
+    description: "Global target %/year allocated across classes using ECCC proportions (ignored if a DisturbanceRate table is provided)"
+    min: 0.6
+    max: 2.4
+
+  - name: cluster_distance
+    column: clusterDistance
+    type: continuous
+    description: "Cluster radius for linear features (m)"
+    min: 500
+    max: 2000
+

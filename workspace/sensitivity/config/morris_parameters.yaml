@@ -1,0 +1,82 @@
+# Parameter definition file for workspace/sensitivity/build_morris_design.R
+# Continuous parameters specify min/max bounds. Discrete/categorical parameters
+# list their possible values explicitly.
+
+parameters:
+  - name: totalDisturbanceRate
+    column: totalDisturbanceRate
+    type: continuous
+    description: "Global target %/year distributed across classes via ECCC proportions (ignored if a DisturbanceRate table is provided)"
+    min: 0.5
+    max: 3.0
+
+  - name: growth_step_generating
+    column: growthStepGenerating
+    type: continuous
+    description: "Generating-stage growth step"
+    min: 0.1
+    max: 5
+    include_in_morris: false
+
+  - name: growth_step_enlarging_polys
+    column: growthStepEnlargingPolys
+    type: continuous
+    description: "Polygon enlarging growth step"
+    min: 0.1
+    max: 5
+    include_in_morris: false
+
+  - name: growth_step_enlarging_lines
+    column: growthStepEnlargingLines
+    type: continuous
+    description: "Linear disturbance enlarging step"
+    min: 0.1
+    max: 5
+    include_in_morris: false
+
+  - name: connecting_block_size
+    column: connectingBlockSize
+    type: integer
+    description: "Connector block radius (cells)"
+    min: 5
+    max: 40
+    levels: 6
+    include_in_morris: false
+
+  - name: cluster_distance
+    column: clusterDistance
+    type: continuous
+    description: "Cluster radius for linear features (cells/metres)"
+    min: 500
+    max: 2000
+
+  - name: distance_new_lines_factor
+    column: distanceNewLinesFactor
+    type: continuous
+    description: "Factor on cluster distance for new line spacing"
+    min: 1.0
+    max: 3.0
+    include_in_morris: false
+
+  - name: use_cluster_method
+    column: useClusterMethod
+    type: discrete
+    description: "Toggle for cluster-based linear placement"
+    values: [TRUE, FALSE]
+
+  - name: disturb_first_year
+    column: disturbFirstYear
+    type: discrete
+    values: [FALSE, TRUE]
+    include_in_morris: false
+
+  - name: site_selection
+    column: siteSelectionAsDistributing
+    type: discrete
+    description: "Site selection strategy for deterministic placement (controls siteSelectionAsDistributing)"
+    values:
+      - ""
+      - "oilGas"
+      - "oilGas;cutblocks"
+      - "oilGas;cutblocks;mining"
+      - "oilGas;cutblocks;mining;seismicLines"

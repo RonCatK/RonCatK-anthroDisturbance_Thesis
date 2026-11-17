@@ -1,0 +1,36 @@
+suite: system
+run_name: system_raster_buffered_dense
+description: Raster-based buffered run with high total disturbance and dense connector blocks.
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: raw
+params:
+  anthroDisturbance_Generator:
+    totalDisturbanceRate: 3.5
+    generatedDisturbanceAsRaster: yes
+    verboseDiagnostics: yes
+    disturbFirstYear: yes
+    saveInitialDisturbances: yes
+    growthStepGenerating: 3
+    growthStepEnlargingPolys: 8
+    growthStepEnlargingLines: 8
+    disturbanceRateRelatesToBufferedArea: yes
+    connectingBlockSize: 1000
+    use_wind_data: no
+n_reps: 1
+seed_base: 53
+input_behaviour:
+  allow_download_if_missing: no
+

@@ -1,0 +1,98 @@
+[rep_003] Options: reproducible.destinationPath=<REPO>/data/raw; spades.inputPath=<REPO>/data/raw; spades.outputPath=<REPO>/outputs/sensitivity/sa_morris_t06_p00/rep_003
+[rep_003] Prebuilt disturbance_inputs.rds: NOT found; searched <none>
+[rep_003] Modules being run: anthroDisturbance_DataPrep,potentialResourcesNT_DataPrep,anthroDisturbance_Generator
+[rep_003] DisturbanceRate not supplied in config; relying on module defaults (.inputObjects).
+[rep_003] Objects injected: disturbanceDT,studyArea,rasterToMatch; disturbanceDT rows: 36
+Setting:
+  options(
+    reproducible.cachePath = '<REPO>/cache/workspace'
+    spades.inputPath = '<REPO>/data/raw'
+    spades.outputPath = '<REPO>/outputs/sensitivity/sa_morris_t06_p00/rep_003'
+    spades.modulePath = '<REPO>/modules'
+    spades.scratchPath = '<REPO>/scratch/sensitivity/sa_morris_t06_p00/rep_003'
+  )
+Paths set to:
+  options(
+    rasterTmpDir = '<REPO>/scratch/sensitivity/sa_morris_t06_p00/rep_003/raster'
+    reproducible.cachePath = '<REPO>/cache/workspace'
+    spades.inputPath = '<REPO>/data/raw'
+    spades.outputPath = '<REPO>/outputs/sensitivity/sa_morris_t06_p00/rep_003'
+    spades.modulePath = '<REPO>/modules'
+    spades.scratchPath = '<REPO>/scratch/sensitivity/sa_morris_t06_p00/rep_003'
+  )
+  terra::terraOptions(tempdir = '<REPO>/scratch/sensitivity/sa_morris_t06_p00/rep_003/terra'
+No packages to install/update
+Nov26 08:08:18 simInit Using setDTthreads(8). To change: 'options(spades.DTthreads = X)'.
+       dataName             dataClass disturbanceType disturbanceRate
+         <char>                <char>          <char>           <num>
+ 1:      Energy   potentialPowerLines      Connecting              NA
+ 2:      oilGas     potentialPipeline      Connecting              NA
+ 3:       roads        potentialRoads      Connecting              NA
+ 4:       roads        potentialRoads      Connecting              NA
+ 5:       roads        potentialRoads      Connecting              NA
+ 6:       roads        potentialRoads      Connecting              NA
+ 7: settlements  potentialSettlements       Enlarging    0.0056856710
+ 8:      oilGas       potentialOilGas      Generating    0.0060033484
+ 9:      oilGas potentialSeismicLines      Generating    2.1778052834
+10:      mining       potentialMining      Generating    0.0008805688
+11:    forestry    potentialCutblocks      Generating    0.0208981377
+                                disturbanceSize disturbanceOrigin
+                                         <char>            <char>
+ 1:                                        <NA>      windTurbines
+ 2:                                        <NA>            oilGas
+ 3:                                        <NA>         cutblocks
+ 4:                                        <NA>      windTurbines
+ 5:                                        <NA>            oilGas
+ 6:                                        <NA>            mining
+ 7:                                        <NA>       settlements
+ 8:  msm::rtnorm(1, 7411.08, 444.79, lower = 0)            oilGas
+ 9: msm::rtnorm(1, 1082.17, 1196.31, lower = 0)      seismicLines
+10:   msm::rtnorm(1, 523069, 785379, lower = 0)            mining
+11:   msm::rtnorm(1, 143723, 147282, lower = 0)         cutblocks
+    disturbanceEnd disturbanceInterval resolutionVector
+            <char>               <int>            <int>
+ 1:     powerLines                  10               15
+ 2:       pipeline                  10               15
+ 3:          roads                  10               15
+ 4:          roads                  10               15
+ 5:          roads                  10               15
+ 6:          roads                  10               15
+ 7:                                 10               15
+ 8:                                 10               15
+ 9:                                 10               15
+10:                                 10               15
+11:                                 10               15
+Total elapsed time for calculating disturbance percentage: : 0.722 sec elapsed
+Difference between expected and achieved change for settlements -- settlements: 0.15  % (ideal value = 0).
+Disturbance achieved: 28.849 km2 -- Disturbance expected: 28.805 km2Difference between expected and achieved change for oilGas -- oilGas: 7.14  % (ideal value = 0).
+Disturbance achieved: 8.604 km2 -- Disturbance expected: 8.031 km2Difference between expected and achieved change for oilGas -- seismicLines: 0.33  % (ideal value = 0).
+Disturbance achieved: 2922.831 km2 -- Disturbance expected: 2913.211 km2Difference between expected and achieved change for mining -- mining: 32.81  % (ideal value = 0).
+Disturbance achieved: 1.564 km2 -- Disturbance expected: 1.178 km2Difference between expected and achieved change for forestry -- cutblocks: 0.73  % (ideal value = 0).
+Disturbance achieved: 28.158 km2 -- Disturbance expected: 27.955 km2[1] "Connected Index 1"
+[1] "Connected Index 2"
+[1] "Connected Index 3"
+[1] "Connected Index 4"
+[1] "Connected Index 5"
+[1] "Connected Index 6"
+Elapsed time for merging oilGas (oilGas): 0.003 sec elapsed
+Elapsed time for merging seismicLines (oilGas): 0.026 sec elapsed
+Elapsed time for merging mining (mining): 0.002 sec elapsed
+Elapsed time for merging roads (roads): 0.005 sec elapsed
+Elapsed time for merging cutblocks (forestry): 0.004 sec elapsed
+Total elapsed time for calculating disturbance percentage: : 0.893 sec elapsed
+Difference between expected and achieved change for settlements -- settlements: 0.05  % (ideal value = 0).
+Disturbance achieved: 36.458 km2 -- Disturbance expected: 36.441 km2Difference between expected and achieved change for oilGas -- oilGas: 7.14  % (ideal value = 0).
+Disturbance achieved: 8.604 km2 -- Disturbance expected: 8.031 km2Difference between expected and achieved change for oilGas -- seismicLines: 0.12  % (ideal value = 0).
+Disturbance achieved: 2916.682 km2 -- Disturbance expected: 2913.211 km2Difference between expected and achieved change for mining -- mining: 65.6  % (ideal value = 0).
+Disturbance achieved: 1.951 km2 -- Disturbance expected: 1.178 km2Difference between expected and achieved change for forestry -- cutblocks: 0.73  % (ideal value = 0).
+Disturbance achieved: 28.158 km2 -- Disturbance expected: 27.955 km2[1] "Connected Index 1"
+[1] "Connected Index 2"
+[1] "Connected Index 3"
+[1] "Connected Index 4"
+[1] "Connected Index 5"
+[1] "Connected Index 6"
+Elapsed time for merging oilGas (oilGas): 0.004 sec elapsed
+Elapsed time for merging seismicLines (oilGas): 0.047 sec elapsed
+Elapsed time for merging mining (mining): 0.006 sec elapsed
+Elapsed time for merging roads (roads): 0.008 sec elapsed
+Elapsed time for merging cutblocks (forestry): 0.006 sec elapsed

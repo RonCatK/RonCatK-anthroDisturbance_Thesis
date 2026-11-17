@@ -1,0 +1,35 @@
+suite: system
+run_name: system_raster_extreme_growth
+description: Supplied raster run with aggressive growth rates.
+config_version: '1'
+modules:
+- anthroDisturbance_DataPrep
+- potentialResourcesNT_DataPrep
+- anthroDisturbance_Generator
+times:
+  start: 2011
+  end: 2031
+  timeunit: year
+paths:
+  input_root: data/raw
+  output_root: outputs
+  scratch_root: scratch
+  module_path: modules
+data_profile: raw
+params:
+  anthroDisturbance_Generator:
+    totalDisturbanceRate: 4.5
+    generatedDisturbanceAsRaster: yes
+    maskWaterAndMountainsFromLines: no
+    verboseDiagnostics: yes
+    disturbFirstYear: yes
+    saveInitialDisturbances: yes
+    growthStepGenerating: 2
+    growthStepEnlargingPolys: 4
+    growthStepEnlargingLines: 4
+    disturbanceRateRelatesToBufferedArea: no
+    use_wind_data: no
+n_reps: 1
+seed_base: 40
+input_behaviour:
+  allow_download_if_missing: no
